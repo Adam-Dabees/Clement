@@ -8,12 +8,16 @@ POLICY = {
     "max_partial_keep_ratio": 0.60,        # never offer more than 60% back on a keep-it partial
     "return_window_days": 45,
     "escalate_keywords": ["human", "manager", "supervisor", "agent", "person", "lawyer", "lawsuit"],
+    "min_classifier_confidence": 0.6,      # below this, ambiguity resolves in the customer's favour (Rule 7)
 }
 
 ORDERS = {
     "A1042": {
         "order_id": "A1042",
         "customer_name": "Dana Whitfield",
+        "customer_email": "dana.whitfield@example.com",
+        "merchant_id": "harlow",
+        "category": "small appliance",
         "item": "Vireo 900W Blender",
         "price_paid": 129.00,
         "unit_cogs": 47.00,          # what it cost the merchant
@@ -28,6 +32,9 @@ ORDERS = {
     "A1077": {
         "order_id": "A1077",
         "customer_name": "Marcus Lee",
+        "customer_email": "marcus.lee@example.com",
+        "merchant_id": "harlow",
+        "category": "bedding",
         "item": "Calder Linen Duvet, King",
         "price_paid": 218.00,
         "unit_cogs": 96.00,
@@ -42,6 +49,9 @@ ORDERS = {
     "A1103": {
         "order_id": "A1103",
         "customer_name": "Priya Raman",
+        "customer_email": "priya.raman@example.com",
+        "merchant_id": "harlow",
+        "category": "luggage",
         "item": "Nomad Carry-On 40L",
         "price_paid": 349.00,
         "unit_cogs": 138.00,
@@ -56,6 +66,9 @@ ORDERS = {
     "A1150": {
         "order_id": "A1150",
         "customer_name": "Tom Okafor",
+        "customer_email": "tom.okafor@example.com",
+        "merchant_id": "harlow",
+        "category": "appliance",
         "item": "Halden Espresso Machine",
         "price_paid": 780.00,        # over the autonomous cap -> escalation demo
         "unit_cogs": 390.00,
@@ -70,6 +83,9 @@ ORDERS = {
     "A1188": {
         "order_id": "A1188",
         "customer_name": "Sofia Alvarez",
+        "customer_email": "sofia.alvarez@example.com",
+        "merchant_id": "harlow",
+        "category": "apparel",
         "item": "Trail Runner Socks, 3-pack",
         "price_paid": 34.00,
         "unit_cogs": 9.00,
