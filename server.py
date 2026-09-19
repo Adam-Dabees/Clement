@@ -113,23 +113,22 @@ def _log(d, sess, inputs):
 
 
 FAULT = {
-    "our_defect_uneconomic_to_return": "merchant_defect",
-    "our_defect_resale_justifies_freight": "merchant_defect",
+    "our_defect_replacement_first": "merchant_defect",
     "customer_asked_for_replacement": "replacement_requested",
-    "preference_return_offer_choice": "customer_preference",
-    "customer_declined_once_full_refund_offered": "customer_preference",
-    "customer_declined_twice_honoring_refund": "customer_preference",
-    "escalated_to_human": "escalated",
-    "not_delivered_full_refund": "not_delivered",
     "not_delivered_replacement_sent": "not_delivered",
+    "preference_return_offer_choice": "customer_preference",
+    "preference_second_offer": "customer_preference",
+    "store_credit_offered_before_refund": "second_offer",
+    "escalated_to_human": "escalated",
+    "customer_declined_twice_refund_via_human": "refund_via_human",
 }
 
 
 def _next_step(d):
+    # Every full cash refund is finalised by a person: escalation and the
+    # two-decline hand-over both end in handoff.
     if d["escalated"]:
         return "handoff"
-    if d["reason_code"] == "customer_declined_twice_honoring_refund":
-        return "close_with_refund"
     return "present_offer"
 
 
@@ -137,23 +136,27 @@ def _phrase(d):
     """A ready-made sentence. The prompt tells the model to say it in its own
     voice, but every number in it came from the engine."""
     a, rc, amt = d["decision"], d["reason_code"], d["customer_gets"]
+    if d["escalated"] == "refund_requires_human":
+        return ("Understood. You'll get the full refund; I'm bringing in a specialist to "
+                "finalise it with you right now. One moment.")
     if d["escalated"]:
         return "I'm connecting you with a specialist right now. One moment."
-    if a == "returnless_refund":
-        if rc.startswith("not_delivered"):
-            return (f"I'm sorry it never made it to you. I'm refunding the full ${amt:.2f} today; "
-                    f"there's nothing you need to do.")
-        return (f"I can refund the full ${amt:.2f} today, and you don't need to "
-                f"ship anything back. Keep it or pass it on.")
     if a == "partial_refund_keep_item":
+        if rc == "preference_second_offer":
+            return (f"Let me do better: ${amt:.2f} back on your card today, and you keep the item. "
+                    f"Or I can do store credit for more than you paid.")
         return (f"Shipping it back is a hassle for you. I can put ${amt:.2f} back "
-                f"on your card today and you keep the item. Or a full refund if you'd rather return it.")
+                f"on your card today, and you keep the item.")
+    if a == "store_credit_bonus":
+        bonus = int(POLICY["store_credit_bonus"] * 100)
+        tail = "and you keep the item." if d["keeps_item"] else "once it's back with us."
+        return f"I can do ${amt:.2f} in store credit, that's {bonus}% more than you paid, {tail}"
     if a == "exchange":
         if rc.startswith("not_delivered"):
-            return "I'm sending a replacement out today. Nothing for you to return."
+            return "I'm sorry it never made it to you. I'm sending a replacement out today; nothing for you to return."
         return "I'll send a replacement out today with a prepaid label for the original."
-    if rc == "customer_declined_once_full_refund_offered":
-        return f"The full ${amt:.2f} refund is yours once the item is back with us. I'll send the label now."
+    if a == "returnless_refund":
+        return f"I can refund the full ${amt:.2f} today, and you don't need to ship anything back."
     return f"I'll refund the full ${amt:.2f} once it's back with us. Label's on its way."
 
 
@@ -163,8 +166,7 @@ def _tool_response(o, d):
     fb = d["fallback_option"]
     must_say = [f"the ${d['customer_gets']:.2f} amount"]
     if fb:
-        must_say.append("that a full refund is available instead" if fb["keeps_item"]
-                        else "that a full refund is available if they would rather return it")
+        must_say.append(f"that ${fb['customer_gets']:.2f} in store credit is the other option")
     return _safe({
         "outcome": d["decision"],
         "amount": d["customer_gets"],

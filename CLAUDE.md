@@ -124,10 +124,14 @@ explain why.
 3. **Every change to `engine.py` needs a matching case in `eval.py`,** and `eval.py` must pass
    before the change counts as done.
 4. **The customer is never denied a refund.** The agent offers alternatives; the customer chooses.
+   The path to a full cash refund always exists; a person finalises it.
 5. **Two declines ends the negotiation.** `customer_declined` counts refusals. At two, the engine
-   hands over the full refund and the agent stops offering.
+   records the full refund and hands the call to a specialist who finalises it. **The agent never
+   pays out cash on its own** (judge feedback, 15:35: the bot must keep optimising; a person handles
+   full refunds). Until then it climbs a ladder: keep-the-revenue offer, then a sweeter one.
 6. **Fault is decided before margin.** If the return is for a defect, the engine never offers a
-   partial refund. Full value back. This is the answer to the dark-pattern question.
+   partial refund: replacement first, then store credit for more than they paid, then a person and
+   the full refund. This is the answer to the dark-pattern question.
 7. **Ambiguity resolves in the customer's favour.** If the Nebius classifier returns confidence
    below 0.6, treat the return as a defect.
 8. **Learned signals feed inputs to `decide()`, never its outcome.** Tone, history, acceptance
@@ -141,31 +145,33 @@ explain why.
 
 ## Decision logic
 
-`decide()` in `engine.py` runs in this order (as of 13:35):
+`decide()` in `engine.py` runs in this order (as of 15:45, the ladder):
 
 1. **Guardrails first.** Escalate if the customer asks for a human (classifier label when
    confident, else keywords), or if order value exceeds `POLICY["max_autonomous_refund_usd"]`
    ($400). Flag orders outside the return window or on accounts with 3+ prior returns (flag for
    review, never confront the customer). **Escalation returns here**, before the decline check.
-2. **Two declines** short-circuits everything below: hand over the refund (returnless if freight
-   recovers nothing, else with return).
-3. **Delivery.** `item_status == never_arrived` (label or keywords) → `returnless_refund`, or
-   `exchange` if they want a replacement. Baseline for these is the returnless refund: you cannot
-   ship back what never arrived.
-4. **Fault axis.** Classifier `is_defect` when confident; below 0.6 confidence → defect (Rule 7);
-   no labels → keyword match (now includes "doesn't work", "won't turn on", …).
-   - Defect + resale below freight cost -> `returnless_refund`
-   - Defect + resale above freight cost -> `full_refund_with_return`
-   - Wants a replacement -> `exchange`
-   - Preference, not defect -> `partial_refund_keep_item`, **fallback = full refund with return**
-5. **One decline** turns the named fallback into the offer (`customer_declined_once_full_refund_offered`).
+2. **Two declines** short-circuits everything below: the record is the full refund (returnless if
+   freight recovers nothing, else with return) with `escalated = refund_requires_human`,
+   `next_step = handoff`. A specialist finalises it.
+3. **Fault axis.** Classifier `is_defect` when confident; below 0.6 confidence → defect (Rule 7);
+   no labels → keyword match. Never-arrived (`item_status`) is decided first; baseline for those
+   is the returnless refund.
+4. **Rung 1 (refusals = 0), keep the revenue:**
+   - Never arrived -> `exchange` (reship), `not_delivered_replacement_sent`
+   - Wants a replacement -> `exchange`, `customer_asked_for_replacement`
+   - Defect -> `exchange`, `our_defect_replacement_first`
+   - Preference -> `partial_refund_keep_item` at the base ratio, `preference_return_offer_choice`
+   No alternative is volunteered. Asking for a full refund counts as a decline.
+5. **Rung 2 (refusals = 1), sweeten:** preference → the partial improves by
+   `POLICY["second_offer_step"]` (39% → 54%) with store credit +15% as the named alternative
+   (`preference_second_offer`); everything else → store credit +15% (`store_credit_offered_before_refund`).
 6. Every outcome is scored as **net to merchant** against the baseline every merchant runs today
-   (full refund with return). The delta is `margin_saved`. Store credit is designed, not scored.
+   (full refund with return). The delta is `margin_saved`.
 
-**Reason codes:** `our_defect_uneconomic_to_return`, `our_defect_resale_justifies_freight`,
-`customer_asked_for_replacement`, `preference_return_offer_choice`, `escalated_to_human`,
-`customer_declined_once_full_refund_offered`, `customer_declined_twice_honoring_refund`,
-`not_delivered_full_refund`, `not_delivered_replacement_sent`.
+**Reason codes:** `our_defect_replacement_first`, `customer_asked_for_replacement`,
+`not_delivered_replacement_sent`, `preference_return_offer_choice`, `preference_second_offer`,
+`store_credit_offered_before_refund`, `escalated_to_human`, `customer_declined_twice_refund_via_human`.
 
 A condition haircut scales recoverable value: `unopened` 1.0, `used` 0.7, `damaged` 0.25.
 
@@ -255,9 +261,14 @@ Each exists to demonstrate one thing. Do not delete one without replacing its ca
 
 ---
 
-## Current state (15:25, on `main`)
+## Current state (15:50, on `main`)
 
 **Working and tested:**
+- **The ladder (15:45, judge feedback).** Judges found the negotiation weak: it named the full
+  refund in the first breath and paid it out after one decline. Now: rung 1 keeps the revenue
+  (partial keep-it, or a replacement), rung 2 sweetens (54% or store credit +15%), and two declines
+  hand the full refund to a specialist. The agent never volunteers or pays a full cash refund.
+  Eval 35/35, **44.0% over baseline** (was 23.7%). Smoke 9/9. Rules 5 and 6 reworded above.
 - **Agent LLM is gpt-4.1 (15:20).** A spoken A1150 call on gpt-4o-mini contained zero tool calls:
   it said "let me check your order", waited, then claimed the order was found. A/B of eight models
   on the live agent (ELEVENLABS.md §4): gpt-4.1 passes accept / human / decline / vague; gpt-5-mini

@@ -43,8 +43,10 @@ partial + keep, exchange — each scored as net-to-merchant. (Store credit with 
 designed outcome, not yet scored; say so if asked.)
 
 - Every outcome scored against the baseline every merchant runs today.
-- Fault is decided **before** margin. Our defect → full value back, always.
-- Customer is never denied a refund. We offer; they choose.
+- Fault is decided **before** margin. Our defect → never a partial: replacement, then credit
+  for more than they paid, then a person and the full refund.
+- Customer is never denied a refund. Two declines and a specialist finalises it. The bot never
+  pays out cash on its own.
 
 Speaker: "This is not haggling. If it's our fault, there is no negotiation. When it's a
 preference, we give the customer a genuine choice — money now and keep it, or the full
@@ -79,8 +81,9 @@ What the audience sees on A while the call runs:
    margin saved **[measured]**.
 2. Hero number and tiles update from `/api/log`.
 
-Then, if time, the two-decline path on **A1188**: decline twice, agent hands over the full
-refund and stops. Say out loud: "Two nos and the negotiation is over. By policy. Not by mood."
+Then, if time, the two-decline path on **A1188**: decline once → a better offer; decline twice →
+"a specialist finalises your full refund" and the call ends. Say out loud: "Two nos and the
+negotiation is over. By policy. Not by mood. And the bot never pays out cash on its own."
 
 Fallback if voice fails: text fallback on `static/index.html` drives the identical backend.
 Say so; it's a feature ("the decision doesn't care which channel it came from").
@@ -170,7 +173,7 @@ the decision engine sees all of it. We take the returns line."
 
 | Number | Source | Tag |
 |---|---|---|
-| 31/31 eval accuracy, 19% escalation, $1,682.42 saved, 23.7% over baseline | `python eval.py` (14:50) | measured |
+| 35/35 eval accuracy, $3,449.04 saved, **44.0% over baseline** (26% of calls end with a specialist, including every full refund) | `python eval.py` (15:50) | measured |
 | Live ElevenLabs call, A1077: tools fired through the tunnel, row +$180.98; A1188 two declines → +$11.50 | `livecall.py` 13:55 | measured |
 | Nebius classifier (gpt-oss-120b): 0.55–1.2 s per call, 0 timeouts over 13 calls, labels correct | `classify.py`, `smoke.py`, `livecall.py` 14:25 | measured |
 | A1077: 39% back = $85.02, +$180.98 vs baseline; two declines → $218 returnless, +$48.00 | `/api/log` on stage | measured |

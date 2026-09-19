@@ -4,99 +4,107 @@ believes your numbers. Run it, screenshot it, put it on the last slide.
 
     python eval.py
 
-Every engine change ships with a case here. Cases run with classifier
-labels ("labels on") and without them ("labels off", keyword fallback),
-so the engine is proven on both paths in one run. No network, no model.
+Every engine change ships with a case here. Cases cover the three rungs
+of the ladder (refusals 0, 1, 2), the guardrails, keyword fallback and
+classifier labels, so the engine is proven on both paths in one run.
+No network, no model.
 """
 
 from data import ORDERS
 from engine import decide
 
-FULL = "Full refund, return the item"
-KEEP = "Full refund, keep the item"
+# expected fallback is the ACTION of the alternative named in the same breath, or None.
+SC = "store_credit_bonus"
+ESCALATED_CODES = ("escalated_to_human", "customer_declined_twice_refund_via_human")
 
 # (order, condition, reason, wants_replacement, refusals, labels,
-#  expected_decision, expected_reason_code, expected_fallback_label)
+#  expected_decision, expected_reason_code, expected_fallback_action)
 CASES = [
-    # --- the original twelve ---
+    # --- rung 1: keep the revenue ---
     ("A1042", "used", "one speed stopped working, it's defective", False, 0, None,
-     "full_refund_with_return", "our_defect_resale_justifies_freight", None),
+     "exchange", "our_defect_replacement_first", None),
     ("A1042", "used", "changed my mind", False, 0, None,
-     "partial_refund_keep_item", "preference_return_offer_choice", FULL),
+     "partial_refund_keep_item", "preference_return_offer_choice", None),
     ("A1042", "used", "defective", True, 0, None,
-     "exchange", "customer_asked_for_replacement", FULL),
+     "exchange", "customer_asked_for_replacement", None),
     ("A1077", "used", "wrong shade of grey", False, 0, None,
-     "partial_refund_keep_item", "preference_return_offer_choice", FULL),
+     "partial_refund_keep_item", "preference_return_offer_choice", None),
     ("A1077", "unopened", "wrong shade, never opened it", False, 0, None,
-     "partial_refund_keep_item", "preference_return_offer_choice", FULL),
+     "partial_refund_keep_item", "preference_return_offer_choice", None),
     ("A1103", "unopened", "wheel scuffed out of the box", False, 0, None,
-     "full_refund_with_return", "our_defect_resale_justifies_freight", None),
+     "exchange", "our_defect_replacement_first", None),
     ("A1103", "unopened", "scuffed wheel", True, 0, None,
-     "exchange", "customer_asked_for_replacement", FULL),
+     "exchange", "customer_asked_for_replacement", None),
+    ("A1188", "used", "too tight", False, 0, None,
+     "partial_refund_keep_item", "preference_return_offer_choice", None),
+
+    # --- rung 2: sweeten, never a partial on a defect ---
+    ("A1077", "used", "wrong shade of grey", False, 1, None,
+     "partial_refund_keep_item", "preference_second_offer", SC),
+    ("A1042", "used", "changed my mind", False, 1, None,
+     "partial_refund_keep_item", "preference_second_offer", SC),
+    ("A1042", "used", "it's defective", False, 1, None,
+     "store_credit_bonus", "store_credit_offered_before_refund", None),
+    ("A1103", "unopened", "scuffed wheel", True, 1, None,
+     "store_credit_bonus", "store_credit_offered_before_refund", None),
+    ("A1077", "used", "it never arrived", False, 1, None,
+     "store_credit_bonus", "store_credit_offered_before_refund", None),
+
+    # --- rung 3: two declines -> full refund, finalised by a person ---
     ("A1103", "used", "just don't want it", False, 2, None,
-     "full_refund_with_return", "customer_declined_twice_honoring_refund", None),
+     "full_refund_with_return", "customer_declined_twice_refund_via_human", None),
+    ("A1188", "used", "too tight, this is the third time", False, 2, None,
+     "returnless_refund", "customer_declined_twice_refund_via_human", None),
+    ("A1077", "used", "it never arrived", False, 2, None,
+     "returnless_refund", "customer_declined_twice_refund_via_human", None),
+
+    # --- guardrails beat everything ---
     ("A1150", "used", "leaking from the group head", False, 0, None,
      "full_refund_with_return", "escalated_to_human", None),
     ("A1150", "damaged", "it leaks, I want a manager", False, 0, None,
      "full_refund_with_return", "escalated_to_human", None),
-    ("A1188", "used", "too tight", False, 0, None,
-     "partial_refund_keep_item", "preference_return_offer_choice", FULL),
-    ("A1188", "used", "too tight, this is the third time", False, 2, None,
-     "returnless_refund", "customer_declined_twice_honoring_refund", None),
-
-    # --- fix 2: escalation beats the two-decline hand-over ---
     ("A1150", "used", "it leaks", False, 2, None,
      "full_refund_with_return", "escalated_to_human", None),
-
-    # --- fix 5: one decline turns the named alternative into the offer ---
-    ("A1077", "used", "wrong shade of grey", False, 1, None,
-     "full_refund_with_return", "customer_declined_once_full_refund_offered", None),
-    ("A1042", "used", "it's defective", False, 1, None,
-     "full_refund_with_return", "our_defect_resale_justifies_freight", None),
-
-    # --- fix 1: rule 6 no longer leaks through phrasing (keyword fallback) ---
-    ("A1042", "used", "it doesn't work", False, 0, None,
-     "full_refund_with_return", "our_defect_resale_justifies_freight", None),
-    ("A1042", "used", "it won't turn on anymore", False, 0, None,
-     "full_refund_with_return", "our_defect_resale_justifies_freight", None),
-
-    # --- escalation keywords match whole words ---
-    ("A1077", "used", "I personally think the grey is off, not what I wanted", False, 0, None,
-     "partial_refund_keep_item", "preference_return_offer_choice", FULL),
     ("A1077", "used", "let me talk to a person please", False, 0, None,
      "full_refund_with_return", "escalated_to_human", None),
     ("A1042", "used", "it's broken", True, 3, None,
-     "full_refund_with_return", "escalated_to_human", None),                     # transcript below carries "human"
+     "full_refund_with_return", "escalated_to_human", None),                     # transcript carries "human"
+    ("A1077", "used", "I personally think the grey is off, not what I wanted", False, 0, None,
+     "partial_refund_keep_item", "preference_return_offer_choice", None),
 
-    # --- fix 1b: negated mentions are not defects (keyword fallback) ---
+    # --- keyword fallback: phrasing and negation ---
+    ("A1042", "used", "it doesn't work", False, 0, None,
+     "exchange", "our_defect_replacement_first", None),
+    ("A1042", "used", "it won't turn on anymore", False, 0, None,
+     "exchange", "our_defect_replacement_first", None),
     ("A1077", "used", "wrong shade of grey, I slept under it one night, it's not damaged", False, 0, None,
-     "partial_refund_keep_item", "preference_return_offer_choice", FULL),
+     "partial_refund_keep_item", "preference_return_offer_choice", None),
     ("A1042", "used", "nothing's broken, I just don't need two blenders", False, 0, None,
-     "partial_refund_keep_item", "preference_return_offer_choice", FULL),
+     "partial_refund_keep_item", "preference_return_offer_choice", None),
     ("A1042", "used", "it's not damaged but the motor is broken", False, 0, None,
-     "full_refund_with_return", "our_defect_resale_justifies_freight", None),
+     "exchange", "our_defect_replacement_first", None),
 
-    # --- fix 1: classifier labels first ---
+    # --- classifier labels first ---
     ("A1042", "used", "changed my mind", False, 0, {"is_defect": False, "confidence": 0.5},
-     "full_refund_with_return", "our_defect_resale_justifies_freight", None),      # rule 7: unsure -> defect
+     "exchange", "our_defect_replacement_first", None),                          # rule 7: unsure -> defect path
     ("A1077", "used", "it's broken, honestly just not my colour", False, 0, {"is_defect": False, "confidence": 0.9},
-     "partial_refund_keep_item", "preference_return_offer_choice", FULL),           # label beats keyword
+     "partial_refund_keep_item", "preference_return_offer_choice", None),        # label beats keyword
     ("A1077", "used", "the seam is split", False, 0, {"is_defect": True, "confidence": 0.95},
-     "returnless_refund", "our_defect_uneconomic_to_return", None),
+     "exchange", "our_defect_replacement_first", None),
     ("A1077", "used", "not the right grey", False, 0, {"requests_human": True, "confidence": 0.9},
      "full_refund_with_return", "escalated_to_human", None),
     ("A1077", "used", "not the right grey", False, 0,
      {"is_defect": False, "wants_replacement": True, "confidences": {"is_defect": 0.9, "wants_replacement": 0.3}},
-     "partial_refund_keep_item", "preference_return_offer_choice", FULL),           # per-field trust
+     "partial_refund_keep_item", "preference_return_offer_choice", None),        # per-field trust
 
-    # --- fix 8: non-delivery is representable ---
+    # --- non-delivery: reship first ---
     ("A1077", "used", "it never arrived", False, 0, None,
-     "returnless_refund", "not_delivered_full_refund", None),
+     "exchange", "not_delivered_replacement_sent", None),
     ("A1042", "used", "never arrived, can you send another", True, 0, None,
-     "exchange", "not_delivered_replacement_sent", KEEP),
+     "exchange", "not_delivered_replacement_sent", None),
     ("A1103", "unopened", "tracking says delivered but there's nothing here", False, 0,
      {"item_status": "never_arrived", "is_defect": False, "confidence": 0.9},
-     "returnless_refund", "not_delivered_full_refund", None),
+     "exchange", "not_delivered_replacement_sent", None),
 ]
 
 
@@ -120,9 +128,10 @@ def main():
             problems.append(f"decision={d['decision']}")
         if d["reason_code"] != exp_rc:
             problems.append(f"reason={d['reason_code']}")
-        if d["fallback"] != exp_fb:
-            problems.append(f"fallback={d['fallback']!r}")
-        if bool(d["escalated"]) != (exp_rc == "escalated_to_human"):
+        fb_action = d["fallback_option"]["action"] if d["fallback_option"] else None
+        if fb_action != exp_fb:
+            problems.append(f"fallback={fb_action!r}")
+        if bool(d["escalated"]) != (exp_rc in ESCALATED_CODES):
             problems.append(f"escalated={d['escalated']!r}")
         ok = not problems
         passed += ok

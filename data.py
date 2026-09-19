@@ -6,6 +6,7 @@ POLICY = {
     "returnless_threshold_ratio": 0.65,    # if return logistics cost >= 65% of resale value, don't ship it back
     "store_credit_bonus": 0.15,            # 15% bonus if customer takes credit
     "max_partial_keep_ratio": 0.60,        # never offer more than 60% back on a keep-it partial
+    "second_offer_step": 0.15,             # how much the keep-it partial improves after one decline
     "return_window_days": 45,
     "escalate_keywords": ["human", "manager", "supervisor", "agent", "person", "lawyer", "lawsuit"],
     "min_classifier_confidence": 0.6,      # below this, ambiguity resolves in the customer's favour (Rule 7)

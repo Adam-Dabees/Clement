@@ -14,7 +14,7 @@ That split is the whole pitch.
 
 ```bash
 uv venv --python 3.12 .venv && uv pip install --python .venv/bin/python -r requirements.txt
-.venv/bin/python eval.py                              # verify the engine: 31/31
+.venv/bin/python eval.py                              # verify the engine: 35/35
 .venv/bin/uvicorn server:app --reload --port 8000     # consoles at localhost:8000
 ```
 
@@ -100,7 +100,7 @@ resolves in the customer's favour.
 | `server.py` | Three webhook tools the agent calls, plus `/api/log`, `/api/agent`, `/api/health`. |
 | `setup_agent.py` | Creates or updates the ElevenLabs agent and tools. Idempotent. |
 | `tunnel.sh` | cloudflared quick tunnel + `setup_agent.py` in one command. |
-| `eval.py` | 31 labelled cases with ground truth. Run it, screenshot it. |
+| `eval.py` | 35 labelled cases with ground truth. Run it, screenshot it. |
 | `smoke.py` | Scripted call sequences against a running server. |
 | `livecall.py` | Typed conversation with the real ElevenLabs agent; the integration checkpoint. |
 | `static/index.html` | Demo console, voice widget, and the text fallback. |
@@ -120,12 +120,12 @@ resolves in the customer's favour.
 
 ## The guardrails, which you demo on purpose
 
-1. **It never denies a refund.** It offers alternatives. The customer picks.
-2. **Two declines and it stops.** `customer_declined` counts refusals; at two
-   the engine hands over the full refund and the agent stops negotiating.
-   Escalation still wins over the decline counter.
-3. **Fault before margin.** If the item is defective, the engine never offers
-   a partial. Full value back. This is the answer to "is this a dark pattern?"
+1. **It never denies a refund.** A full refund is always reachable; a specialist finalises it.
+2. **It climbs a ladder, then stops.** First offer keeps the revenue (partial keep-it, or a
+   replacement). One decline: a sweeter offer (54%, or store credit +15%). Two declines: the
+   full refund, handed to a person. The bot never pays out cash on its own.
+3. **Fault before margin.** A defect never gets a partial: replacement, then credit for more
+   than they paid, then a person. This is the answer to "is this a dark pattern?"
 4. **A hard cap.** Above $400 it escalates rather than deciding.
 5. **The model never sees cost basis.** Margin figures stay server-side, out
    of the transcript; `server.py` refuses to return them and `smoke.py` checks.

@@ -551,7 +551,7 @@
               <hr class="hr" style="margin:16px 0">
               <p class="eyebrow">Chosen</p>
               <p style="font-weight:600;margin-top:5px">39% back, keep the item &nbsp;<span class="sub" style="font-weight:400">— $85.02</span></p>
-              <p class="sub" style="font-size:13px;margin-top:6px">Fallback on ask: full refund, return the item.</p>
+              <p class="sub" style="font-size:13px;margin-top:6px">If declined: 54% back, or store credit with a 15% bonus. Two declines: a specialist finalises the full refund.</p>
               <div class="note good" style="margin-top:14px;font-size:13px">
                 <b>+$180.98</b> vs the baseline. Opened bedding has no resale value, so
                 paying $48 of freight recovers nothing.
@@ -1229,18 +1229,18 @@ const SPARK = [2.1, 2.6, 2.4, 3.1, 3.5, 3.2, 4.1, 4.4, 4.9, 4.6, 5.4, 5.8, 6.2, 
 
 const DECISION_ORDER = [
   ["1", "Guardrails", "Escalate on a request for a human, or above the $400 cap. Flag late returns and accounts with 3+ prior returns — flag for review, never confront the customer."],
-  ["2", "Declines", "Two refusals short-circuits everything below. Hand over the refund."],
-  ["3", "Fault", "Defect decided before margin. Faulty and uneconomic to ship back → returnless. Faulty and worth the freight → full refund with return. Wants the same item → exchange."],
-  ["4", "Preference", "Not a fault: offer a partial with the item kept, with the full refund always available on ask."],
+  ["2", "Declines", "Two refusals ends the negotiation: the full refund is theirs, and a specialist finalises it. The agent never pays out cash on its own."],
+  ["3", "Fault", "Defect decided before margin. A defect never gets a partial: replacement first, then store credit for more than they paid, then a person and the full refund."],
+  ["4", "Preference", "Not a fault: a partial with the item kept, then a better partial or store credit, then a person and the full refund."],
   ["5", "Scoring", "Every outcome scored as net-to-merchant against the baseline of full refund with return. The gap is the margin saved, and it is logged."],
 ];
 
 const LOG_SEED = [
   {_when: "14:22:08", item: "Calder Linen Duvet, King", reason: "wrong shade of grey", offer_label: "39% back, keep the item", reason_code: "preference_return_offer_choice", margin_saved: 180.98, escalated: null},
-  {_when: "14:18:51", item: "Trail Runner Socks, 3-pack", reason: "too tight", offer_label: "Full refund, keep the item", reason_code: "customer_declined_twice_honoring_refund", margin_saved: 11.50, escalated: null},
+  {_when: "14:18:51", item: "Trail Runner Socks, 3-pack", reason: "too tight", offer_label: "Full refund, keep the item", reason_code: "customer_declined_twice_refund_via_human", margin_saved: 11.50, escalated: "refund_requires_human"},
   {_when: "14:11:34", item: "Halden Espresso Machine", reason: "leaking from the group head", offer_label: "Full refund, return the item", reason_code: "escalated_to_human", margin_saved: 0, escalated: "above_autonomous_refund_cap"},
   {_when: "14:04:12", item: "Nomad Carry-On 40L", reason: "scuffed wheel", offer_label: "Replacement sent out", reason_code: "customer_asked_for_replacement", margin_saved: 211.00, escalated: null},
-  {_when: "13:57:40", item: "Vireo 900W Blender", reason: "one speed stopped working", offer_label: "Full refund, return the item", reason_code: "our_defect_resale_justifies_freight", margin_saved: 0, escalated: null},
+  {_when: "13:57:40", item: "Vireo 900W Blender", reason: "one speed stopped working", offer_label: "Replacement sent out", reason_code: "our_defect_replacement_first", margin_saved: 82.00, escalated: null},
 ];
 
 const TAPE = [
@@ -1248,7 +1248,7 @@ const TAPE = [
   ["Marcus", "Yeah it's A one zero seven seven."],
   ["Agent", "Got it — the Calder duvet, Marcus. What went wrong with it?"],
   ["Marcus", "The grey is way darker than the photo. It's not damaged or anything, it just doesn't work in the room."],
-  ["Agent", "That's fair, and annoying. Shipping a king duvet back is a hassle for you — I can put $85.02 back on your card today and you keep it. Or a full refund if you'd rather return it."],
+  ["Agent", "That's fair, and annoying. Shipping a king duvet back is a hassle for you — I can put $85.02 back on your card today and you keep it."],
   ["Marcus", "Oh — I can keep it? Yeah, let's do that."],
 ];
 

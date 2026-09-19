@@ -52,15 +52,14 @@ NEGATIONS = (
 )
 
 REASON_CODES = (
-    "our_defect_uneconomic_to_return",
-    "our_defect_resale_justifies_freight",
+    "our_defect_replacement_first",
     "customer_asked_for_replacement",
-    "preference_return_offer_choice",
-    "escalated_to_human",
-    "customer_declined_once_full_refund_offered",
-    "customer_declined_twice_honoring_refund",
-    "not_delivered_full_refund",
     "not_delivered_replacement_sent",
+    "preference_return_offer_choice",
+    "preference_second_offer",
+    "store_credit_offered_before_refund",
+    "escalated_to_human",
+    "customer_declined_twice_refund_via_human",
 )
 
 
@@ -87,7 +86,7 @@ def _uneconomic_to_return(order, condition):
     return resale - logistics <= 0
 
 
-def evaluate(order, condition="used", wants_replacement=False, never_arrived=False):
+def evaluate(order, condition="used", wants_replacement=False, never_arrived=False, refusals=0):
     """Return every viable outcome, scored by net margin impact to the merchant.
 
     All figures are 'change in merchant position vs. the sale standing'.
@@ -126,8 +125,10 @@ def evaluate(order, condition="used", wants_replacement=False, never_arrived=Fal
     })
 
     # 3. Partial refund, customer keeps the item.
-    #    Offer is scaled by how little we would recover anyway.
-    partial_ratio = min(POLICY["max_partial_keep_ratio"], 0.30 + (0.30 * (1 - haircut)))
+    #    Offer is scaled by how little we would recover anyway, and improves
+    #    by one step after the first decline (the second rung of the ladder).
+    partial_ratio = 0.30 + (0.30 * (1 - haircut)) + POLICY["second_offer_step"] * min(refusals, 1)
+    partial_ratio = min(POLICY["max_partial_keep_ratio"], partial_ratio)
     partial = price * partial_ratio
     options.append({
         "action": "partial_refund_keep_item",
@@ -150,9 +151,18 @@ def evaluate(order, condition="used", wants_replacement=False, never_arrived=Fal
         "rationale": f"Keep ${price:.2f} revenue, ship a replacement at ${cogs:.2f} cost.",
     })
 
-    # Store credit with a bonus is a designed outcome, not a scored one yet:
-    # its economics (bonus cost vs. cash retained vs. a second fulfilment)
-    # need a merchant-supplied redemption rate before it can be ranked.
+    # 5. Store credit with a bonus: cash stays, the bonus is the cost. The
+    #    item comes back only if that recovers something.
+    credit = price * (1 + POLICY["store_credit_bonus"])
+    returned = recovery > 0
+    options.append({
+        "action": "store_credit_bonus",
+        "label": f"${credit:.2f} store credit ({int(POLICY['store_credit_bonus'] * 100)}% bonus)",
+        "customer_gets": _round(credit),
+        "keeps_item": not returned,
+        "net_to_merchant": _round(-(credit - price) + (recovery if returned else 0.0)),
+        "rationale": f"Customer takes ${credit:.2f} in credit. Cash stays with us; the bonus is the only cost.",
+    })
 
     options.sort(key=lambda o: o["net_to_merchant"], reverse=True)
     return options
@@ -160,7 +170,7 @@ def evaluate(order, condition="used", wants_replacement=False, never_arrived=Fal
 
 def decide(order, condition="used", reason="", wants_replacement=False,
            refusals=0, transcript="", labels=None):
-    """Pick an opening offer and its alternative. Returns the full decision record.
+    """Pick the offer for this rung of the ladder (by `refusals`). Returns the full record.
 
     `labels` is the classifier's output (or None): any of
       is_defect, item_status ("in_hand" | "never_arrived"), wants_replacement,
@@ -179,7 +189,7 @@ def decide(order, condition="used", reason="", wants_replacement=False,
     else:
         never_arrived = any(k in text for k in NOT_DELIVERED_KEYWORDS)
 
-    options = evaluate(order, condition, wants_replacement, never_arrived)
+    options = evaluate(order, condition, wants_replacement, never_arrived, refusals)
     baseline = _opt(options, "returnless_refund" if never_arrived
                     else "full_refund_with_return")
 
@@ -207,54 +217,48 @@ def decide(order, condition="used", reason="", wants_replacement=False,
         return _record(order, baseline, baseline, options, flags,
                        escalate, "escalated_to_human", None)
 
-    # The customer has pushed back twice. Stop negotiating. Give the refund.
+    # Two declines: the negotiation is over. The full refund is theirs, and
+    # a person finalises it. The agent never pays out cash on its own.
     if refusals >= 2:
         chosen = (_opt(options, "returnless_refund")
                   if _uneconomic_to_return(order, condition) else baseline)
         return _record(order, chosen, baseline, options, flags,
-                       escalate, "customer_declined_twice_honoring_refund", None)
+                       "refund_requires_human", "customer_declined_twice_refund_via_human", None)
 
     # --- Inputs: labels first, keyword match only as fallback. ---
     if lab.get("wants_replacement") and confident(lab, "wants_replacement"):
         wants_replacement = True
 
     # Whose fault is it? This is the fairness axis and it runs BEFORE the
-    # margin axis. We never haggle over a defect we caused. Say this line
-    # out loud when a judge asks about dark patterns.
+    # margin axis. A defect never gets a partial: replacement, then credit
+    # for more than they paid, then a person and the full refund. Say this
+    # line out loud when a judge asks about dark patterns.
     if "is_defect" in lab:
         # Rule 7: if the classifier is unsure, the customer gets the benefit.
         is_defect = bool(lab["is_defect"]) if confident(lab, "is_defect") else True
     else:
         is_defect = _keyword_defect(text)
 
-    # --- Optimisation, inside the envelope. ---
-    if never_arrived:
-        # Nothing to return and nothing to haggle over.
-        if wants_replacement:
+    preference = not (never_arrived or wants_replacement or is_defect)
+
+    # --- The ladder. Rung 1 keeps the revenue; rung 2 sweetens; rung 3 is above. ---
+    if refusals == 0:
+        fallback = None
+        if never_arrived:
             chosen, reason_code = _opt(options, "exchange"), "not_delivered_replacement_sent"
+        elif wants_replacement:
+            chosen, reason_code = _opt(options, "exchange"), "customer_asked_for_replacement"
+        elif is_defect:
+            chosen, reason_code = _opt(options, "exchange"), "our_defect_replacement_first"
         else:
-            chosen, reason_code = _opt(options, "returnless_refund"), "not_delivered_full_refund"
-    elif wants_replacement:
-        chosen, reason_code = _opt(options, "exchange"), "customer_asked_for_replacement"
-    elif is_defect:
-        # Our fault. Full value back. The only open question is whether
-        # paying freight recovers anything.
-        if _uneconomic_to_return(order, condition):
-            chosen, reason_code = _opt(options, "returnless_refund"), "our_defect_uneconomic_to_return"
-        else:
-            chosen, reason_code = baseline, "our_defect_resale_justifies_freight"
+            chosen, reason_code = _opt(options, "partial_refund_keep_item"), "preference_return_offer_choice"
     else:
-        # Preference, not defect. A genuine choice is legitimate here:
-        # money now and keep it, or the full refund if they'd rather ship
-        # it back. The fallback is always the full refund, on ask.
-        chosen, reason_code = _opt(options, "partial_refund_keep_item"), "preference_return_offer_choice"
-
-    fallback = _fallback_for(chosen, options, never_arrived)
-
-    # One decline: the alternative we already named becomes the offer.
-    # There is no third option to invent; two choices, the caller picks.
-    if refusals == 1 and fallback is not None:
-        chosen, reason_code, fallback = fallback, "customer_declined_once_full_refund_offered", None
+        if preference:
+            chosen, reason_code = _opt(options, "partial_refund_keep_item"), "preference_second_offer"
+            fallback = _opt(options, "store_credit_bonus")
+        else:
+            chosen, reason_code = _opt(options, "store_credit_bonus"), "store_credit_offered_before_refund"
+            fallback = None
 
     return _record(order, chosen, baseline, options, flags, escalate, reason_code, fallback)
 
@@ -269,17 +273,6 @@ def _keyword_defect(text):
     for neg in NEGATIONS:
         text = text.replace(neg, " ")
     return any(k in text for k in DEFECT_KEYWORDS)
-
-
-def _fallback_for(chosen, options, never_arrived):
-    """The alternative the agent names in the same breath. Always the full
-    refund, never store credit: the phrase promises 'a full refund if you'd
-    rather', so the record must say the same."""
-    if chosen["action"] not in ("partial_refund_keep_item", "exchange"):
-        return None
-    if never_arrived:
-        return _opt(options, "returnless_refund")
-    return _opt(options, "full_refund_with_return")
 
 
 def _record(order, chosen, baseline, options, flags, escalate, reason_code, fallback):
