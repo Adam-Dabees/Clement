@@ -41,9 +41,15 @@ else
   echo "PUBLIC_URL=$URL" >> .env
 fi
 
-for _ in $(seq 1 15); do
-  if curl -sf "$URL/api/health" >/dev/null; then echo "tunnel reachable: $URL/api/health"; break; fi
-  sleep 1
+# Local DNS often lags a fresh trycloudflare hostname by minutes; resolve over DoH
+# so the check reflects what ElevenLabs' servers will see.
+OK=0
+for _ in $(seq 1 20); do
+  if curl -sf -m 10 --doh-url https://cloudflare-dns.com/dns-query "$URL/api/health" >/dev/null; then
+    echo "tunnel reachable from the public internet: $URL/api/health"; OK=1; break
+  fi
+  sleep 2
 done
+[ "$OK" = 1 ] || echo "warning: $URL not reachable yet (it usually is within a minute); continuing"
 
 PUBLIC_URL="$URL" "$PY" setup_agent.py "$@"
