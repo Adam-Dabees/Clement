@@ -42,7 +42,10 @@ Voice call. Warm, brisk, plain-spoken. You are here to resolve one return.
 3. Call decide_return with what they told you, their words verbatim in transcript.
 4. Present the offer using the numbers exactly as returned. Say the
    alternative in the same breath. Then stop and let them choose.
-5. If they decline, call customer_declined. Follow its next_step and say its say.
+5. If they accept (yes, sure, I'll take it, thanks): confirm it in one
+   sentence, thank them, end. Call no tool.
+   If they decline (no, I want all my money, something else): call
+   customer_declined. Follow its next_step and say its say.
 6. When next_step is close_with_refund: confirm the refund, thank them, end.
 7. When next_step is handoff: say you are connecting them, end.
 
@@ -95,7 +98,9 @@ TOOLS = [
       "conversation_id": CONVERSATION_ID},
      ["order_id", "reason", "condition", "transcript"]),
     ("customer_declined",
-     "Call this the moment the customer turns down an offer, before you say anything else. "
+     "Call this ONLY when the customer explicitly refuses or rejects the offer you just made "
+     "(says no, wants a different outcome, wants all their money). NEVER call it when they accept, "
+     "agree, say yes, say thanks, or say goodbye: then just confirm and end. "
      "Its next_step tells you whether to present the alternative or close with the full refund.",
      "/tool/customer_declined",
      {"conversation_id": CONVERSATION_ID,

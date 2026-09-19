@@ -37,6 +37,18 @@ NOT_DELIVERED_KEYWORDS = (
     "did not receive", "never got it", "never showed up", "nothing here",
 )
 
+# Negated mentions are not defects: "it's not damaged", "nothing's broken".
+# Stripped from the text before the keyword pass. Keyword fallback only;
+# the classifier handles this properly when it is on.
+NEGATIONS = (
+    "not damaged", "isn't damaged", "is not damaged", "no damage", "undamaged",
+    "not broken", "isn't broken", "nothing broken", "nothing's broken", "nothing is broken",
+    "not defective", "isn't defective", "no defect", "not faulty", "isn't faulty",
+    "nothing wrong with it", "nothing's wrong with it", "nothing is wrong with it",
+    "works fine", "working fine", "works perfectly", "not missing", "nothing missing",
+    "no leak", "not leaking", "doesn't leak", "not cracked", "not torn", "not stained",
+)
+
 REASON_CODES = (
     "our_defect_uneconomic_to_return",
     "our_defect_resale_justifies_freight",
@@ -211,7 +223,7 @@ def decide(order, condition="used", reason="", wants_replacement=False,
         # Rule 7: if the classifier is unsure, the customer gets the benefit.
         is_defect = bool(lab["is_defect"]) if confident(lab, "is_defect") else True
     else:
-        is_defect = any(k in text for k in DEFECT_KEYWORDS)
+        is_defect = _keyword_defect(text)
 
     # --- Optimisation, inside the envelope. ---
     if never_arrived:
@@ -243,6 +255,13 @@ def decide(order, condition="used", reason="", wants_replacement=False,
         chosen, reason_code, fallback = fallback, "customer_declined_once_full_refund_offered", None
 
     return _record(order, chosen, baseline, options, flags, escalate, reason_code, fallback)
+
+
+def _keyword_defect(text):
+    """Keyword fallback for is_defect, blind to negated mentions."""
+    for neg in NEGATIONS:
+        text = text.replace(neg, " ")
+    return any(k in text for k in DEFECT_KEYWORDS)
 
 
 def _fallback_for(chosen, options, never_arrived):

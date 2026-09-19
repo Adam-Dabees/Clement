@@ -141,8 +141,8 @@ that call." **[illustrative numbers, real mechanism]**
   envelope. The dry-run replay of the last 90 days closes the sale.
 - Wedge: Shopify homeware/apparel merchants, where zero-resale categories are common.
 
-Worked example **[measured]**: eval set saves $1,254.37 across 25 returns ≈ $50 per return.
-At a 20% share, ~$10 per call to us, ~$40 to the merchant, and the customer got money
+Worked example **[measured]**: eval set saves $1,501.44 across 28 returns ≈ $54 per return.
+At a 20% share, ~$11 per call to us, ~$43 to the merchant, and the customer got money
 faster without shipping anything. *(20% is a proposal, not a decision — say "for
 example".)*
 
@@ -170,7 +170,8 @@ the decision engine sees all of it. We take the returns line."
 
 | Number | Source | Tag |
 |---|---|---|
-| 25/25 eval accuracy, 16% escalation, $1,254.37 saved, 21.0% over baseline | `python eval.py` (13:35) | measured |
+| 28/28 eval accuracy, 14% escalation, $1,501.44 saved, 23.2% over baseline | `python eval.py` (14:05) | measured |
+| Live ElevenLabs call, A1077: tools fired through the tunnel, row +$180.98; A1188 two declines → +$11.50 | `livecall.py` 13:55 | measured |
 | A1077: 39% back = $85.02, +$180.98 vs baseline; two declines → $218 returnless, +$48.00 | `/api/log` on stage | measured |
 | Per-order cost structure (A1042…A1188) | `data.py` | measured (mock, realistic) |
 | $61,400 hero, 2,847 returns, CSAT 4.46, dial curve | `business.html` seeds | illustrative |

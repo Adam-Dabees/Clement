@@ -14,7 +14,7 @@ That split is the whole pitch.
 
 ```bash
 uv venv --python 3.12 .venv && uv pip install --python .venv/bin/python -r requirements.txt
-.venv/bin/python eval.py                              # verify the engine: 25/25
+.venv/bin/python eval.py                              # verify the engine: 28/28
 .venv/bin/uvicorn server:app --reload --port 8000     # consoles at localhost:8000
 ```
 
@@ -58,6 +58,16 @@ the dashboard is the fallback.
 
 `python setup_agent.py --dry-run` prints every payload without a key.
 
+Prove the wiring without a microphone: `livecall.py` types into the real agent over its
+WebSocket, so the webhooks, tunnel, engine and log all run for real.
+
+```bash
+.venv/bin/python livecall.py             # A1077: partial keep-it offer, accepted
+.venv/bin/python livecall.py --decline   # A1188: decline twice, refund without return
+```
+
+Run it after every `./tunnel.sh`. If it reports no log row, the tool URLs are stale.
+
 ## Nebius
 
 `classify.py` is the intake classifier: it turns a rambling spoken complaint into
@@ -84,8 +94,9 @@ resolves in the customer's favour.
 | `server.py` | Three webhook tools the agent calls, plus `/api/log`, `/api/agent`, `/api/health`. |
 | `setup_agent.py` | Creates or updates the ElevenLabs agent and tools. Idempotent. |
 | `tunnel.sh` | cloudflared quick tunnel + `setup_agent.py` in one command. |
-| `eval.py` | 25 labelled cases with ground truth. Run it, screenshot it. |
+| `eval.py` | 28 labelled cases with ground truth. Run it, screenshot it. |
 | `smoke.py` | Scripted call sequences against a running server. |
+| `livecall.py` | Typed conversation with the real ElevenLabs agent; the integration checkpoint. |
 | `static/index.html` | Demo console, voice widget, and the text fallback. |
 | `static/business.html` | Merchant console. Live page is wired; the rest is seeded. |
 

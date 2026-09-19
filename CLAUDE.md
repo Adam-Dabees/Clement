@@ -3,7 +3,9 @@
 > Read fully before doing anything. Last updated **2026-09-19 13:35 PDT** (hackathon day,
 > freeze at 16:30). If you are a Claude Code session on a different laptop: the plan in
 > §"Execution plan" is what we are running. Ask what time it is and which checkpoint was
-> reached before proposing work. §"Current state" says what landed on `main` at 13:35.
+> reached before proposing work. §"Current state" says what landed on `main` at 14:05.
+> **Voice is live (13:55):** the integration checkpoint passed with a real ElevenLabs conversation
+> calling all three tools through the tunnel and landing a row on Live.
 
 ---
 
@@ -98,8 +100,9 @@ decides an outcome. Its second honest use is parsing the merchant's policy docum
 | `server.py` | main | FastAPI. Three webhook tools (`lookup_order`, `decide_return`, `customer_declined`), `/api/log`, `/api/agent`, `/api/health`, `/api/reset`. Tool responses are the ELEVENLABS.md §6.2 shape (`outcome`, `amount`, `alternative`, `next_step`, `say`…); `_safe()` refuses to return a cost field. One log row per conversation. Mounts `static/` at `/`. |
 | `setup_agent.py` | main | Creates **or updates in place** the ElevenLabs tools and agent (`.clement_agent.json` holds ids). Binds `conversation_id` to `system__conversation_id`. `--dry-run` verified; **not yet run against a live key.** |
 | `tunnel.sh` | main | cloudflared quick tunnel → `PUBLIC_URL` in `.env` → `setup_agent.py`. Re-run on every tunnel restart. |
-| `eval.py` | main | 25 labelled cases (decision, reason code, fallback, escalation; labels on and off). **Must pass before any engine change counts.** |
+| `eval.py` | main | 28 labelled cases (decision, reason code, fallback, escalation; labels on and off). **Must pass before any engine change counts.** |
 | `smoke.py` | main | Scripted demo sequences against a running server (`--port 8010`). Asserts Rule 2 on every tool response. |
+| `livecall.py` | main | Drives the **real** ElevenLabs agent over its WebSocket with typed text: exercises tools, tunnel, engine and log without a microphone. `--decline` for the A1188 path. Run it after every `tunnel.sh`. |
 | `static/index.html` | main | Demo console: stat tiles, decision log, voice widget (mounts from `/api/agent`), text fallback driving the same backend. |
 | `static/business.html` | main | **Merchant console.** Onboarding (3 steps) + six pages. Only **Live** is wired (`/api/log`, 4s poll, 1.2s abort, seeded fallback). Served at `/business.html`. |
 | `SLIDES.md` | main (untracked until committed) | The pitch, run of show, Q&A prep, and which numbers are measured vs illustrative. Edit alongside the build. |
@@ -171,7 +174,8 @@ A condition haircut scales recoverable value: `unopened` 1.0, `used` 0.7, `damag
 Found by probing, not reading. **Applied on `main`, each with eval cases:** 1, 2, 3, 4, 5, 8.
 **Deferred, need a policy decision, not code:** 6, 7.
 
-1. ✅ Rule 6 leaked through keywords. Now: classifier labels first, keyword fallback widened.
+1. ✅ Rule 6 leaked through keywords. Now: classifier labels first, keyword fallback widened and
+   blind to negations ("it's not damaged" no longer reads as a defect; found on the first live call).
 2. ✅ Two-declines ran before escalation. Now: escalation returns first.
 3. ✅ `fallback` was store credit. Now: explicitly the full refund; store credit not scored.
 4. ✅ `customer_declined` hardcoded "no return needed". Now: it re-runs the engine and speaks
@@ -251,11 +255,18 @@ Each exists to demonstrate one thing. Do not delete one without replacing its ca
 
 ---
 
-## Current state (13:35, on `main`)
+## Current state (14:05, on `main`)
 
 **Working and tested:**
-- Decision engine, **25/25** on the eval set: 100% accuracy, 16% escalation, $1,254.37 saved
-  across 25 returns, 21.0% over the full-refund baseline. Labels-on and labels-off cases both
+- **Voice live.** Agent `agent_0201m2xp7s21fcb9nh0nn7c62vcx` (gpt-4o-mini, 0.2, 120 tokens,
+  auth disabled, widget renders on `/`). `livecall.py` ran the A1077 accept path (partial $85.02
+  accepted, no spurious decline call, row +$180.98) and the A1188 two-decline path (partial →
+  full refund with return → returnless, row +$11.50, `customer_declined_twice_honoring_refund`).
+  `conversation_id` is the ElevenLabs conversation id. Tunnel URL is in `.env`; re-run
+  `./tunnel.sh` if cloudflared restarts. Local DNS lags fresh tunnel names by minutes; the public
+  internet (and ElevenLabs) sees them at once.
+- Decision engine, **28/28** on the eval set: 100% accuracy, 14% escalation, $1,501.44 saved
+  across 28 returns, 23.2% over the full-refund baseline. Labels-on and labels-off cases both
   pass. Determinism checked (every case run twice, identical records).
 - FastAPI server: three webhook tools return the §6.2 shape with `next_step`; `smoke.py`
   passes 8 conversations with zero cost fields in any tool response.
@@ -264,12 +275,12 @@ Each exists to demonstrate one thing. Do not delete one without replacing its ca
 - Merchant console at `/business.html` verified in Chrome: Live shows the "demo data" pill,
   flips to "1 live" on a real decision, seeds agree with the engine (39% / $85.02 / +$180.98).
 - `classify.py` written; returns `None` without a key (engine falls back to keywords).
-- `setup_agent.py --dry-run` prints valid payloads; `tunnel.sh` ready; cloudflared installed.
+- `setup_agent.py` has run for real and PATCHes in place (`.clement_agent.json` holds ids).
 - Interaction store: designed and verified, stashed (see above).
 
 **Not done:**
-- **Voice live.** No `ELEVENLABS_API_KEY` yet. When it arrives: put it in `.env`, run
-  `./tunnel.sh`, restart uvicorn, call A1077. **Highest risk.**
+- **A real microphone call on stage.** Text over the WebSocket is proven; a spoken call adds ASR
+  and TTS only. Do one before rehearsal.
 - **Nebius live.** No `NEBIUS_API_KEY` yet. When it arrives: `.env`, then
   `.venv/bin/python classify.py` to see labels and latency. Engine is proven on both paths.
 - Engine fixes 6 and 7 (deferred, see above).
@@ -318,6 +329,10 @@ speaker notes, Q&A prep and the measured/illustrative table are in `SLIDES.md`.
 - **Port 8000 on Adam's laptop is the user-started `--reload` server.** Don't start a second one
   there; use 8010 for scripted tests.
 - **`business.html` lives in `static/` now** and is served at `/business.html`.
+- **The ElevenLabs simulate-conversation API mocks tools** (returns "Tool Called." without
+  hitting the webhook). It proves nothing about wiring; use `livecall.py`.
+- **The agent may call `customer_declined` on an acceptance** if the tool description is soft.
+  The current description says NEVER on accept/thanks/goodbye; verified on the A1077 accept path.
 - **`must_not_say` in tool responses is the list of words the model must avoid.** It is the one
   place "margin" and "resale" legitimately appear in a tool response; `smoke.py` skips that key.
 

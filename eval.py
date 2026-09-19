@@ -60,6 +60,14 @@ CASES = [
     ("A1042", "used", "it won't turn on anymore", False, 0, None,
      "full_refund_with_return", "our_defect_resale_justifies_freight", None),
 
+    # --- fix 1b: negated mentions are not defects (keyword fallback) ---
+    ("A1077", "used", "wrong shade of grey, I slept under it one night, it's not damaged", False, 0, None,
+     "partial_refund_keep_item", "preference_return_offer_choice", FULL),
+    ("A1042", "used", "nothing's broken, I just don't need two blenders", False, 0, None,
+     "partial_refund_keep_item", "preference_return_offer_choice", FULL),
+    ("A1042", "used", "it's not damaged but the motor is broken", False, 0, None,
+     "full_refund_with_return", "our_defect_resale_justifies_freight", None),
+
     # --- fix 1: classifier labels first ---
     ("A1042", "used", "changed my mind", False, 0, {"is_defect": False, "confidence": 0.5},
      "full_refund_with_return", "our_defect_resale_justifies_freight", None),      # rule 7: unsure -> defect
