@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Clement</title>
+<style>
+  :root {
+    --bg: #fbfaf8;
+    --panel: #ffffff;
+    --line: #e7e3dc;
+    --ink: #1c1a17;
+    --muted: #6f6a62;
+    --accent: #1f6f54;
+    --warn: #9a5b1e;
+    --radius: 10px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #171614; --panel: #201e1b; --line: #33302b;
+      --ink: #f0ece6; --muted: #9c958a; --accent: #5cc79c; --warn: #d79a52;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #171614; --panel: #201e1b; --line: #33302b;
+    --ink: #f0ece6; --muted: #9c958a; --accent: #5cc79c; --warn: #d79a52;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.6 ui-sans-serif, -apple-system, "Segoe UI", system-ui, sans-serif;
+    padding: 48px 16px 120px;
+  }
+  .wrap { max-width: 1040px; margin: 0 auto; }
+  header { margin-bottom: 48px; }
+  h1 { font-size: 26px; font-weight: 600; margin: 0 0 6px; letter-spacing: -0.01em; }
+  .sub { color: var(--muted); margin: 0; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 16px; margin-bottom: 40px; }
+  .stat { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 22px 24px; }
+  .stat .n { font-size: 30px; font-weight: 600; letter-spacing: -0.02em; }
+  .stat .l { color: var(--muted); font-size: 13px; margin-top: 4px; }
+  .accent { color: var(--accent); }
+  h2 { font-size: 13px; font-weight: 600; text-transform: uppercase;
+       letter-spacing: 0.07em; color: var(--muted); margin: 0 0 16px; }
+  .panel { background: var(--panel); border: 1px solid var(--line);
+           border-radius: var(--radius); padding: 24px; margin-bottom: 32px; }
+  .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+  input, select, button {
+    font: inherit; padding: 9px 13px; border-radius: 7px;
+    border: 1px solid var(--line); background: var(--bg); color: var(--ink);
+  }
+  input { min-width: 240px; flex: 1; }
+  button { background: var(--accent); color: #fff; border: none; cursor: pointer; font-weight: 500; }
+  button.ghost { background: transparent; color: var(--muted); border: 1px solid var(--line); }
+  .say { margin-top: 20px; padding: 18px 20px; border-left: 3px solid var(--accent);
+         background: var(--bg); border-radius: 0 7px 7px 0; }
+  .say .who { font-size: 12px; color: var(--muted); margin-bottom: 6px;
+              text-transform: uppercase; letter-spacing: 0.06em; }
+  table { width: 100%; border-collapse: collapse; }
+  th { text-align: left; font-size: 12px; font-weight: 500; color: var(--muted);
+       text-transform: uppercase; letter-spacing: 0.06em;
+       padding: 0 12px 12px 0; border-bottom: 1px solid var(--line); }
+  td { padding: 14px 12px 14px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+  .pos { color: var(--accent); font-variant-numeric: tabular-nums; }
+  .esc { color: var(--warn); }
+  .empty { color: var(--muted); padding: 24px 0; }
+  code { background: var(--bg); padding: 2px 6px; border-radius: 4px; font-size: 13px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>Clement</h1>
+    <p class="sub">Every return is a margin decision. This one gets made.</p>
+  </header>
+
+  <div class="stats">
+    <div class="stat"><div class="n" id="s-calls">0</div><div class="l">Returns handled</div></div>
+    <div class="stat"><div class="n accent" id="s-saved">$0</div><div class="l">Margin saved vs full refund</div></div>
+    <div class="stat"><div class="n" id="s-ret">0%</div><div class="l">Sale retained</div></div>
+    <div class="stat"><div class="n" id="s-esc">0</div><div class="l">Escalated to human</div></div>
+  </div>
+
+  <!-- VOICE. Paste your two lines from setup_agent.py here. -->
+  <div class="panel">
+    <h2>Voice</h2>
+    <p class="sub" style="margin-bottom:8px">Call the returns line. Try order A1042, A1077, A1103, A1150 or A1188.</p>
+    <!-- <elevenlabs-convai agent-id="PASTE_ID"></elevenlabs-convai>
+         <script src="https://unpkg.com/@elevenlabs/convai-widget-embed" async></script> -->
+  </div>
+
+  <!-- TEXT FALLBACK. Same backend. This is what saves the demo in a loud room. -->
+  <div class="panel">
+    <h2>Text fallback</h2>
+    <div class="row">
+      <select id="f-order"></select>
+      <input id="f-reason" placeholder="Why are you returning it?" value="one speed stopped working, it's defective">
+      <select id="f-cond">
+        <option value="used">Used</option>
+        <option value="unopened">Unopened</option>
+        <option value="damaged">Damaged</option>
+      </select>
+      <button onclick="go()">Decide</button>
+      <button class="ghost" onclick="decline()">Customer declines</button>
+      <button class="ghost" onclick="reset()">Reset</button>
+    </div>
+    <div class="say" id="say" style="display:none">
+      <div class="who">Agent</div>
+      <div id="say-text"></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>Decision log</h2>
+    <div id="log"></div>
+  </div>
+
+</div>
+
+<script>
+const ORDERS = {
+  A1042: "A1042 — Vireo Blender ($129)",
+  A1077: "A1077 — Linen Duvet ($218)",
+  A1103: "A1103 — Nomad Carry-On ($349)",
+  A1150: "A1150 — Espresso Machine ($780)",
+  A1188: "A1188 — Trail Socks ($34)",
+};
+const sel = document.getElementById('f-order');
+for (const [k, v] of Object.entries(ORDERS)) {
+  const o = document.createElement('option'); o.value = k; o.textContent = v; sel.appendChild(o);
+}
+
+const CID = "demo-" + Math.random().toString(36).slice(2, 8);
+
+async function go() {
+  const body = {
+    order_id: sel.value,
+    reason: document.getElementById('f-reason').value,
+    condition: document.getElementById('f-cond').value,
+    wants_replacement: false,
+    conversation_id: CID,
+    transcript: document.getElementById('f-reason').value,
+  };
+  const r = await fetch('/tool/decide_return', {
+    method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)
+  }).then(r => r.json());
+  show(r.say);
+  refresh();
+}
+
+async function decline() {
+  const r = await fetch('/tool/customer_declined', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({conversation_id: CID})
+  }).then(r => r.json());
+  show(r.say);
+}
+
+function show(t) {
+  document.getElementById('say').style.display = 'block';
+  document.getElementById('say-text').textContent = t;
+}
+
+async function reset() {
+  await fetch('/api/reset', {method: 'POST'});
+  document.getElementById('say').style.display = 'none';
+  refresh();
+}
+
+async function refresh() {
+  const d = await fetch('/api/log').then(r => r.json());
+  document.getElementById('s-calls').textContent = d.total_calls;
+  document.getElementById('s-saved').textContent = '$' + d.margin_saved.toFixed(2);
+  document.getElementById('s-ret').textContent = d.retention_rate + '%';
+  document.getElementById('s-esc').textContent = d.escalations;
+
+  const el = document.getElementById('log');
+  if (!d.calls.length) { el.innerHTML = '<div class="empty">No returns yet.</div>'; return; }
+  el.innerHTML = `<table><thead><tr>
+      <th>Time</th><th>Item</th><th>Reason</th><th>Outcome</th><th>Saved</th>
+    </tr></thead><tbody>` + d.calls.map(c => `
+      <tr>
+        <td style="color:var(--muted)">${c._when}</td>
+        <td>${c.item}</td>
+        <td style="color:var(--muted)">${c.reason || '—'}</td>
+        <td>${c.escalated ? '<span class="esc">Escalated: ' + c.escalated + '</span>' : c.offer_label}
+            <div style="color:var(--muted);font-size:13px;margin-top:3px">${c.reason_code}</div></td>
+        <td class="pos">${c.margin_saved >= 0 ? '+' : ''}$${c.margin_saved.toFixed(2)}</td>
+      </tr>`).join('') + '</tbody></table>';
+}
+
+refresh();
+setInterval(refresh, 2000);
+</script>
+</body>
+</html>
