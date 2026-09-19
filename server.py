@@ -137,8 +137,7 @@ def _phrase(d):
     voice, but every number in it came from the engine."""
     a, rc, amt = d["decision"], d["reason_code"], d["customer_gets"]
     if d["escalated"] == "refund_requires_human":
-        return ("Understood. You'll get the full refund; I'm bringing in a specialist to "
-                "finalise it with you right now. One moment.")
+        return "Understood. Let me bring in a specialist to take it from here. One moment."
     if d["escalated"]:
         return "I'm connecting you with a specialist right now. One moment."
     if a == "partial_refund_keep_item":
@@ -164,20 +163,23 @@ def _tool_response(o, d):
     """The planned shape from ELEVENLABS.md §6.2: facts for the model to
     voice, plus `say` and the older keys the text fallback still reads."""
     fb = d["fallback_option"]
-    must_say = [f"the ${d['customer_gets']:.2f} amount"]
+    handoff = bool(d["escalated"])
+    must_say = [] if handoff else [f"the ${d['customer_gets']:.2f} amount"]
     if fb:
         must_say.append(f"that ${fb['customer_gets']:.2f} in store credit is the other option")
+    # On a hand-off the model gets no outcome and no amount: the specialist
+    # decides what the customer hears. The engine's record stays in the log.
     return _safe({
-        "outcome": d["decision"],
-        "amount": d["customer_gets"],
-        "keeps_item": d["keeps_item"],
+        "outcome": "handoff" if handoff else d["decision"],
+        "amount": None if handoff else d["customer_gets"],
+        "keeps_item": None if handoff else d["keeps_item"],
         "alternative": ({"outcome": fb["action"], "amount": fb["customer_gets"],
                          "keeps_item": fb["keeps_item"]} if fb else None),
         "customer_chooses": fb is not None,
         "context": {"first_name": o["customer_name"].split()[0], "item": o["item"],
                     "fault": FAULT.get(d["reason_code"], "customer_preference")},
         "must_say": must_say,
-        "must_not_say": MUST_NOT_SAY,
+        "must_not_say": MUST_NOT_SAY + (["refund"] if handoff else []),
         "escalated": bool(d["escalated"]),
         "escalation_reason": d["escalated"],
         "next_step": _next_step(d),
@@ -294,14 +296,15 @@ def customer_declined(req: RefuseReq):
         lab["confidences"] = {k: v for k, v in (lab.get("confidences") or {}).items() if k != "requests_human"}
         inputs["labels"] = lab
     d = _run(o, sess, inputs)
-    say = _phrase(d) if (closing or d["escalated"]) else "That's fair. " + _phrase(d)
+    handoff = bool(d["escalated"])
+    say = _phrase(d) if (closing or handoff) else "That's fair. " + _phrase(d)
     return _safe({
-        "stop_negotiating": closing or bool(d["escalated"]),
-        "next_step": _next_step(d) if (closing or d["escalated"]) else "present_alternative",
+        "stop_negotiating": closing or handoff,
+        "next_step": _next_step(d) if (closing or handoff) else "present_alternative",
         "say": say,
-        "outcome": d["decision"],
-        "amount": d["customer_gets"],
-        "keeps_item": d["keeps_item"],
+        "outcome": "handoff" if handoff else d["decision"],
+        "amount": None if handoff else d["customer_gets"],
+        "keeps_item": None if handoff else d["keeps_item"],
         "escalated": bool(d["escalated"]),
         "escalation_reason": d["escalated"],
     })

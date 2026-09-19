@@ -101,7 +101,7 @@ def main(base):
     check(r1["outcome"] == "partial_refund_keep_item" and r1["amount"] == 18.36 and "do better" in r1["say"], f"A1188 rung 2 {r1['say']}")
     r2 = c.post("/tool/customer_declined", conversation_id=k, customer_response="I'm not shipping anything", sentiment="frustrated")
     check(r2["stop_negotiating"] and r2["next_step"] == "handoff" and r2["escalated"], f"A1188 decline 2 {r2}")
-    check(r2["outcome"] == "returnless_refund" and "specialist" in r2["say"], f"A1188 decline 2 say {r2['say']}")
+    check(r2["outcome"] == "handoff" and r2["amount"] is None and "specialist" in r2["say"] and "refund" not in r2["say"].lower(), f"A1188 decline 2 say {r2}")
     row = next(x for x in c.log()["calls"] if x["conversation_id"] == k)
     check(row["reason_code"] == "customer_declined_twice_refund_via_human" and row["escalated"] == "refund_requires_human"
           and row["margin_saved"] == 11.5, f"A1188 final row {row['reason_code']} {row['escalated']} {row['margin_saved']}")
@@ -131,7 +131,7 @@ def main(base):
     c.post("/tool/decide_return", order_id="A1103", reason="just don't want it", condition="used", conversation_id=k)
     c.post("/tool/customer_declined", conversation_id=k)
     r2 = c.post("/tool/customer_declined", conversation_id=k)
-    check(r2["outcome"] == "full_refund_with_return" and r2["next_step"] == "handoff" and r2["escalation_reason"] == "refund_requires_human", f"A1103 declines {r2}")
+    check(r2["outcome"] == "handoff" and r2["next_step"] == "handoff" and r2["escalation_reason"] == "refund_requires_human", f"A1103 declines {r2}")
     n_expected_rows += 1
 
     print("7. A1077 never arrived: reship first")
