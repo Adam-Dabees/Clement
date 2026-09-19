@@ -74,6 +74,16 @@
   .empty { color: var(--muted); padding: 24px 0; }
   code { background: var(--bg); padding: 2px 6px; border-radius: 4px; font-size: 13px; }
   a { color: var(--accent); }
+  tbody tr.click { cursor: pointer; }
+  tbody tr.open td { background: var(--bg); }
+  .detail { margin-top: 16px; padding: 18px 20px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--bg); }
+  .detail h3 { font-size: 14px; font-weight: 600; margin: 0 0 4px; }
+  .detail .cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px; }
+  .detail .kv { display: grid; grid-template-columns: 130px 1fr; gap: 6px 12px; font-size: 13.5px; }
+  .detail .kv .k { color: var(--muted); }
+  .detail ul { margin: 8px 0 0 18px; padding: 0; font-size: 13.5px; }
+  .detail table td, .detail table th { padding: 8px 10px 8px 0; font-size: 13.5px; }
+  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
 </style>
 </head>
 <body>
@@ -116,7 +126,7 @@
       <label class="sub" style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="f-repl">Wants replacement</label>
       <button onclick="go()">Decide</button>
       <button class="ghost" onclick="decline()">Customer declines</button>
-      <button class="ghost" onclick="reset()">Reset</button>
+      <button class="ghost" onclick="reset()" title="Clears every call collected on this machine">Reset collected data</button>
     </div>
     <div class="say" id="say" style="display:none">
       <div class="who">Agent</div>
@@ -127,7 +137,9 @@
 
   <div class="panel">
     <h2>Decision log</h2>
+    <p class="sub" style="margin:0 0 12px;font-size:13px">One row per call. Click a row for everything collected on it.</p>
     <div id="log"></div>
+    <div id="log-detail"></div>
   </div>
 
 </div>
@@ -202,7 +214,49 @@ fetch('/api/agent').then(r => r.json()).then(a => {
 async function reset() {
   await fetch('/api/reset', {method: 'POST'});
   document.getElementById('say').style.display = 'none';
+  OPEN_CALL = null; CALLS = [];
+  document.getElementById('log-detail').innerHTML = '';
   refresh();
+}
+
+let CALLS = [], OPEN_CALL = null;
+function showCall(i) {
+  const c = CALLS[i]; if (!c) return;
+  OPEN_CALL = c.conversation_id;
+  const esc = s => String(s ?? '—').replace(/&/g, '&amp;').replace(/</g, '&lt;');
+  const usd = n => '$' + Number(n || 0).toFixed(2);
+  const kv = (k, v) => `<span class="k">${k}</span><span>${v}</span>`;
+  const lab = c.classifier;
+  const decl = (c.declines || []).length
+    ? c.declines.map(d => `<li>Decline ${d.n}: &ldquo;${esc(d.said) || '(no words captured)'}&rdquo; <span style="color:var(--muted)">${esc(d.sentiment) || ''}</span></li>`).join('')
+    : '<li style="color:var(--muted)">none</li>';
+  const conf = lab && lab.confidences ? Object.entries(lab.confidences).map(([k, v]) => `${k} ${Number(v).toFixed(2)}`).join(' · ') : '';
+  const opts = (c.options || []).map(o => `<tr><td>${esc(o.label)}${o.action === c.decision ? ' <b>← chosen</b>' : ''}</td><td>${usd(o.customer_gets)}</td><td>${usd(o.net_to_merchant)}</td></tr>`).join('');
+  document.getElementById('log-detail').innerHTML = `
+    <div class="detail">
+      <div class="row" style="justify-content:space-between;margin-bottom:12px">
+        <div><h3>${esc(c.item)} · <span class="mono">${esc(c.order_id)}</span></h3>
+        <div class="sub" style="font-size:12.5px">Conversation <span class="mono">${esc(c.conversation_id)}</span> · ${esc(c._when)}</div></div>
+        <button class="ghost" onclick="OPEN_CALL=null;document.getElementById('log-detail').innerHTML='';refresh()">Close</button>
+      </div>
+      <div class="cols">
+        <div>
+          <h2>What the customer said</h2>
+          <div class="kv">${kv('Reason', esc(c.reason))}${kv('Condition used', esc(c.condition))}${kv('Declines', c.refusals ?? 0)}</div>
+          <ul>${decl}</ul>
+          <h2 style="margin-top:18px">Classifier · Nebius</h2>
+          ${lab ? `<div class="kv">${kv('Return type', esc(lab.return_type))}${kv('Item status', esc(lab.item_status))}${kv('Condition', esc(lab.condition))}${kv('Wants replacement', lab.wants_replacement ?? '—')}${kv('Requests human', lab.requests_human ?? '— (re-read from their words on each decline)')}${kv('Confidence', conf || Number(lab.confidence).toFixed(2))}${kv('Latency', (lab.latency_ms || 0) + ' ms')}${kv('Model', `<span class="mono">${esc(lab.model)}</span>`)}</div>`
+                : '<p class="sub">Not available on this call: keyword fallback decided the inputs.</p>'}
+        </div>
+        <div>
+          <h2>What the engine did</h2>
+          <div class="kv">${kv('Decision', `<span class="mono">${esc(c.decision)}</span>`)}${kv('Reason code', `<span class="mono">${esc(c.reason_code)}</span>`)}${kv('Offer', esc(c.offer_label) + ' · ' + usd(c.customer_gets))}${kv('Alternative', esc(c.fallback))}${kv('Escalated', esc(c.escalated))}${kv('Net to merchant', usd(c.net_to_merchant))}${kv('Baseline net', usd(c.baseline_net))}${kv('Margin saved', `<b class="pos">${usd(c.margin_saved)}</b>`)}${kv('Flags', (c.flags || []).map(esc).join('; ') || 'none')}</div>
+          <p class="sub" style="font-size:13px;margin:8px 0 0">${esc(c.rationale)}</p>
+          <h2 style="margin-top:18px">Every option, scored</h2>
+          <table><thead><tr><th>Option</th><th>Customer gets</th><th>Net to merchant</th></tr></thead><tbody>${opts}</tbody></table>
+        </div>
+      </div>
+    </div>`;
 }
 
 async function refresh() {
@@ -213,11 +267,12 @@ async function refresh() {
   document.getElementById('s-esc').textContent = d.escalations;
 
   const el = document.getElementById('log');
-  if (!d.calls.length) { el.innerHTML = '<div class="empty">No returns yet.</div>'; return; }
+  CALLS = d.calls;
+  if (!d.calls.length) { el.innerHTML = '<div class="empty">No returns yet.</div>'; document.getElementById('log-detail').innerHTML = ''; return; }
   el.innerHTML = `<table><thead><tr>
       <th>Time</th><th>Item</th><th>Reason</th><th>Outcome</th><th>Saved</th>
-    </tr></thead><tbody>` + d.calls.map(c => `
-      <tr>
+    </tr></thead><tbody>` + d.calls.map((c, i) => `
+      <tr class="click${c.conversation_id === OPEN_CALL ? ' open' : ''}" onclick="showCall(${i})">
         <td style="color:var(--muted)">${c._when}</td>
         <td>${c.item}</td>
         <td style="color:var(--muted)">${c.reason || '—'}</td>
@@ -225,6 +280,7 @@ async function refresh() {
             <div style="color:var(--muted);font-size:13px;margin-top:3px">${c.reason_code}</div></td>
         <td class="pos">${c.margin_saved >= 0 ? '+' : ''}$${c.margin_saved.toFixed(2)}</td>
       </tr>`).join('') + '</tbody></table>';
+  if (OPEN_CALL) { const i = d.calls.findIndex(c => c.conversation_id === OPEN_CALL); if (i >= 0) showCall(i); else OPEN_CALL = null; }
 }
 
 refresh();
