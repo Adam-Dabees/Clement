@@ -16,6 +16,8 @@ Inputs come from three places, in priority order:
 No model call, no network, no clock, no randomness happens in here.
 """
 
+import re
+
 from data import POLICY
 
 HAIRCUT = {"unopened": 1.0, "used": 0.7, "damaged": 0.25}
@@ -188,7 +190,7 @@ def decide(order, condition="used", reason="", wants_replacement=False,
     if "requests_human" in lab and confident(lab, "requests_human"):
         asked_for_human = bool(lab["requests_human"])
     else:
-        asked_for_human = any(k in text for k in POLICY["escalate_keywords"])
+        asked_for_human = _keyword_human(text)
     if asked_for_human:
         escalate = "customer_requested_human"
     if order["price_paid"] > POLICY["max_autonomous_refund_usd"]:
@@ -255,6 +257,11 @@ def decide(order, condition="used", reason="", wants_replacement=False,
         chosen, reason_code, fallback = fallback, "customer_declined_once_full_refund_offered", None
 
     return _record(order, chosen, baseline, options, flags, escalate, reason_code, fallback)
+
+
+def _keyword_human(text):
+    """Escalation keywords match whole words: "person" yes, "personally" no."""
+    return any(re.search(r"\b" + re.escape(k) + r"\b", text) for k in POLICY["escalate_keywords"])
 
 
 def _keyword_defect(text):

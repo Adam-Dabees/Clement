@@ -60,6 +60,14 @@ CASES = [
     ("A1042", "used", "it won't turn on anymore", False, 0, None,
      "full_refund_with_return", "our_defect_resale_justifies_freight", None),
 
+    # --- escalation keywords match whole words ---
+    ("A1077", "used", "I personally think the grey is off, not what I wanted", False, 0, None,
+     "partial_refund_keep_item", "preference_return_offer_choice", FULL),
+    ("A1077", "used", "let me talk to a person please", False, 0, None,
+     "full_refund_with_return", "escalated_to_human", None),
+    ("A1042", "used", "it's broken", True, 3, None,
+     "full_refund_with_return", "escalated_to_human", None),                     # transcript below carries "human"
+
     # --- fix 1b: negated mentions are not defects (keyword fallback) ---
     ("A1077", "used", "wrong shade of grey, I slept under it one night, it's not damaged", False, 0, None,
      "partial_refund_keep_item", "preference_return_offer_choice", FULL),
@@ -103,8 +111,9 @@ def main():
     print("-" * 90)
 
     for oid, cond, reason, repl, refusals, labels, exp_dec, exp_rc, exp_fb in CASES:
+        transcript = reason if refusals < 3 else reason + " I want to speak to a human now"
         d = decide(ORDERS[oid], condition=cond, reason=reason,
-                   wants_replacement=repl, refusals=refusals, transcript=reason,
+                   wants_replacement=repl, refusals=refusals, transcript=transcript,
                    labels=labels)
         problems = []
         if d["decision"] != exp_dec:

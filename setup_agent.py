@@ -39,6 +39,9 @@ Voice call. Warm, brisk, plain-spoken. You are here to resolve one return.
 1. Ask for the order number. Read it back. Call lookup_order.
 2. Use their first name once. Ask what went wrong. Listen for:
    unopened / used / damaged, and whether they want a replacement.
+   If all they say is "broken", "doesn't work" or similar, ask once what
+   exactly is wrong before deciding. wants_replacement is true only if
+   they ask for another unit; "fix it" or "repair it" is not a replacement.
 3. Call decide_return with what they told you, their words verbatim in transcript.
 4. Present the offer using the numbers exactly as returned. Say the
    alternative in the same breath. Then stop and let them choose.
@@ -46,8 +49,9 @@ Voice call. Warm, brisk, plain-spoken. You are here to resolve one return.
    sentence, thank them, end. Call no tool.
    If they decline (no, I want all my money, something else): call
    customer_declined. Follow its next_step and say its say.
-6. When next_step is close_with_refund: confirm the refund, thank them, end.
-7. When next_step is handoff: say you are connecting them, end.
+6. When next_step is close_with_refund: say the say line once, thank them,
+   then call end_call. Do not ask them to confirm again.
+7. When next_step is handoff: say the say line once, then call end_call.
 
 # Never
 - Never state an amount that did not come from a tool.
@@ -59,8 +63,10 @@ Voice call. Warm, brisk, plain-spoken. You are here to resolve one return.
   continue the flow.
 
 # If the caller
-- is angry or asks for a person: call decide_return with their words in
-  transcript and follow handoff. Do not try to save the call.
+- asks for a person, human, manager or supervisor, at ANY point, even after
+  a refund was offered: call decide_return again with their exact words in
+  transcript, then say its say line and call end_call. Never answer that
+  request with customer_declined. Do not try to save the call.
 - gives an order number that fails lookup: ask them to read it again,
   once. If it fails twice, say you will have a colleague call them back and end.
 - is silent or unclear: repeat your last question in different words, once.
@@ -100,7 +106,8 @@ TOOLS = [
     ("customer_declined",
      "Call this ONLY when the customer explicitly refuses or rejects the offer you just made "
      "(says no, wants a different outcome, wants all their money). NEVER call it when they accept, "
-     "agree, say yes, say thanks, or say goodbye: then just confirm and end. "
+     "agree, say yes, say thanks, or say goodbye: then just confirm and end. NEVER call it when they "
+     "ask for a human, person, manager or supervisor: call decide_return with their words instead. "
      "Its next_step tells you whether to present the alternative or close with the full refund.",
      "/tool/customer_declined",
      {"conversation_id": CONVERSATION_ID,
@@ -137,6 +144,14 @@ def agent_config(tool_ids):
                     "temperature": 0.2,
                     "max_tokens": 120,
                     "tool_ids": tool_ids,
+                    "built_in_tools": {
+                        "end_call": {
+                            "type": "system", "name": "end_call",
+                            "description": "End the call. Use it right after saying the closing line when "
+                                           "next_step is close_with_refund or handoff, or after the customer says goodbye.",
+                            "params": {"system_tool_type": "end_call"},
+                        }
+                    },
                 },
             },
         },
@@ -231,14 +246,14 @@ def main():
     aid = state.get("agent_id")
     if aid:
         try:
-            c.call("PATCH", f"/agents/{aid}", cfg, drop_on_422=("platform_settings",))
+            c.call("PATCH", f"/agents/{aid}", cfg, drop_on_422=("built_in_tools", "platform_settings"))
             print(f"agent    updated  {aid}")
         except SystemExit as e:
             if "404" not in str(e):
                 raise
             aid = None
     if not aid:
-        aid = c.call("POST", "/agents/create", cfg, drop_on_422=("platform_settings",))["agent_id"]
+        aid = c.call("POST", "/agents/create", cfg, drop_on_422=("built_in_tools", "platform_settings"))["agent_id"]
         state["agent_id"] = aid
         print(f"agent    created  {aid}")
     STATE.write_text(json.dumps(state, indent=2))

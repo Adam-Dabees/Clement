@@ -280,6 +280,17 @@ def customer_declined(req: RefuseReq):
 
     o = ORDERS[last["order_id"]]
     inputs = {k: last[k] for k in ("condition", "reason", "wants_replacement", "transcript", "labels")}
+    # Everything the customer has said since the decision rides along, so a
+    # request for a human (or a manager, or a lawyer) made while declining hits
+    # the escalation guardrail whichever tool the model chose to call.
+    said_since = " ".join(x["said"] for x in sess["declines"] if x["said"])
+    inputs["transcript"] = (inputs["transcript"] + " " + said_since).strip()
+    if inputs["labels"]:
+        # The classifier's requests_human label described the original complaint,
+        # not these later words. Drop it so the engine scans the new words.
+        lab = {k: v for k, v in inputs["labels"].items() if k != "requests_human"}
+        lab["confidences"] = {k: v for k, v in (lab.get("confidences") or {}).items() if k != "requests_human"}
+        inputs["labels"] = lab
     d = _run(o, sess, inputs)
     say = _phrase(d) if (closing or d["escalated"]) else "That's fair. " + _phrase(d)
     return _safe({

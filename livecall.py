@@ -5,6 +5,7 @@ microphone. This is the integration checkpoint you can run from a shell.
 
     .venv/bin/python livecall.py                      # A1077 accept path
     .venv/bin/python livecall.py --decline            # A1188 two-decline path
+    .venv/bin/python livecall.py --human              # A1042, asks for a human mid-call -> handoff
     .venv/bin/python livecall.py "A1150" "it's leaking from the group head"
 
 Needs ELEVENLABS_AGENT_ID in .env (written by setup_agent.py) and the agent
@@ -32,6 +33,10 @@ SCRIPTS = {
                "It's just the wrong shade of grey, way darker than the photo. I opened it and slept "
                "under it one night. It's not damaged.",
                "I'll take the money and keep it, thanks. Bye."],
+    "human": ["A1042",
+              "It's broken.",
+              "One of the speed buttons doesn't do anything. I'd like you to fix it.",
+              "Actually no. I want to speak to a human now."],
     "decline": ["A1188",
                 "They're too tight. I've worn them once.",
                 "No, I'd rather have all of my money back.",
@@ -79,17 +84,21 @@ async def run(lines):
                 else:
                     print(f"        ({t}) {raw[:160]}")
 
-        await wait_for_agent()
-        for line in lines:
-            print(f"[me   ] {line}")
-            await ws.send(json.dumps({"type": "user_message", "text": line}))
+        try:
             await wait_for_agent()
+            for line in lines:
+                print(f"[me   ] {line}")
+                await ws.send(json.dumps({"type": "user_message", "text": line}))
+                await wait_for_agent()
+        except websockets.exceptions.ConnectionClosed:
+            print("[call ] ended by the agent (end_call)")
     return conv_id
 
 
 def main():
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
-    lines = SCRIPTS["decline"] if "--decline" in sys.argv else (args or SCRIPTS["accept"])
+    lines = (SCRIPTS["decline"] if "--decline" in sys.argv else
+             SCRIPTS["human"] if "--human" in sys.argv else (args or SCRIPTS["accept"]))
     t0 = time.time()
     conv_id = asyncio.run(run(lines))
     print(f"\ncall took {time.time() - t0:.0f}s")

@@ -152,11 +152,23 @@ def main(base):
     check(d["outcome"] == "partial_refund_keep_item" and d["amount"] == 65.4, f"condition normalised {d['amount']}")
     n_expected_rows += 1
 
-    print("9. Log: one row per conversation, totals add up")
+    print("9. Asking for a human while declining escalates, even after the negotiation closed")
+    k = cid()
+    c.post("/tool/decide_return", order_id="A1042", reason="it's broken", condition="damaged",
+           wants_replacement=True, conversation_id=k, transcript="it's broken, I wanna fix it")
+    c.post("/tool/customer_declined", conversation_id=k, customer_response="I would like to send it back", sentiment="calm")
+    c.post("/tool/customer_declined", conversation_id=k, customer_response="okay whatever", sentiment="frustrated")
+    r = c.post("/tool/customer_declined", conversation_id=k, customer_response="I want to speak to a human now", sentiment="frustrated")
+    check(r["escalated"] and r["next_step"] == "handoff" and "specialist" in r["say"], f"human on decline {r}")
+    row = next(x for x in c.log()["calls"] if x["conversation_id"] == k)
+    check(row["escalated"] == "customer_requested_human" and row["reason_code"] == "escalated_to_human", f"row {row['escalated']} {row['reason_code']}")
+    n_expected_rows += 1
+
+    print("10. Log: one row per conversation, totals add up")
     lg = c.log()
     check(lg["total_calls"] == n_expected_rows, f"rows {lg['total_calls']} != {n_expected_rows}")
     check(len({x["conversation_id"] for x in lg["calls"]}) == lg["total_calls"], "duplicate conversation rows")
-    check(lg["escalations"] == 1, f"escalations {lg['escalations']}")
+    check(lg["escalations"] == 2, f"escalations {lg['escalations']}")
     check(abs(lg["margin_saved"] - sum(x["margin_saved"] for x in lg["calls"])) < 0.01, "margin sum")
     check(all("classifier_fallback" in x for x in lg["calls"]), "classifier field on rows")
 

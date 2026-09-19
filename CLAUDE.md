@@ -3,7 +3,7 @@
 > Read fully before doing anything. Last updated **2026-09-19 13:35 PDT** (hackathon day,
 > freeze at 16:30). If you are a Claude Code session on a different laptop: the plan in
 > §"Execution plan" is what we are running. Ask what time it is and which checkpoint was
-> reached before proposing work. §"Current state" says what landed on `main` at 14:30.
+> reached before proposing work. §"Current state" says what landed on `main` at 14:50.
 > **Voice is live (13:55)** and **Nebius is live (14:25):** a real ElevenLabs conversation calls all
 > three tools through the tunnel, the classifier labels it in ~1 s, and a row lands on Live.
 
@@ -100,9 +100,9 @@ decides an outcome. Its second honest use is parsing the merchant's policy docum
 | `server.py` | main | FastAPI. Three webhook tools (`lookup_order`, `decide_return`, `customer_declined`), `/api/log`, `/api/agent`, `/api/health`, `/api/reset`. Tool responses are the ELEVENLABS.md §6.2 shape (`outcome`, `amount`, `alternative`, `next_step`, `say`…); `_safe()` refuses to return a cost field. One log row per conversation. Mounts `static/` at `/`. |
 | `setup_agent.py` | main | Creates **or updates in place** the ElevenLabs tools and agent (`.clement_agent.json` holds ids). Binds `conversation_id` to `system__conversation_id`. `--dry-run` verified; **not yet run against a live key.** |
 | `tunnel.sh` | main | cloudflared quick tunnel → `PUBLIC_URL` in `.env` → `setup_agent.py`. Re-run on every tunnel restart. |
-| `eval.py` | main | 28 labelled cases (decision, reason code, fallback, escalation; labels on and off). **Must pass before any engine change counts.** |
+| `eval.py` | main | 31 labelled cases (decision, reason code, fallback, escalation; labels on and off). **Must pass before any engine change counts.** |
 | `smoke.py` | main | Scripted demo sequences against a running server (`--port 8010`). Asserts Rule 2 on every tool response. |
-| `livecall.py` | main | Drives the **real** ElevenLabs agent over its WebSocket with typed text: exercises tools, tunnel, engine and log without a microphone. `--decline` for the A1188 path. Run it after every `tunnel.sh`. |
+| `livecall.py` | main | Drives the **real** ElevenLabs agent over its WebSocket with typed text: exercises tools, tunnel, engine and log without a microphone. `--decline` (A1188), `--human` (A1042, asks for a person mid-call). Run it after every `tunnel.sh`. |
 | `static/index.html` | main | Demo console: stat tiles, decision log, voice widget (mounts from `/api/agent`), text fallback driving the same backend. |
 | `static/business.html` | main | **Merchant console.** Onboarding (3 steps) + six pages. Only **Live** is wired (`/api/log`, 4s poll, 1.2s abort, seeded fallback). Served at `/business.html`. |
 | `SLIDES.md` | main (untracked until committed) | The pitch, run of show, Q&A prep, and which numbers are measured vs illustrative. Edit alongside the build. |
@@ -255,9 +255,17 @@ Each exists to demonstrate one thing. Do not delete one without replacing its ca
 
 ---
 
-## Current state (14:30, on `main`)
+## Current state (14:50, on `main`)
 
 **Working and tested:**
+- **Escalation from anywhere in the call (14:45).** First spoken test showed "I want to speak to a
+  human" mid-negotiation going to `customer_declined`, whose re-run never saw the new words. Now
+  every decline carries the customer's words into the engine's transcript, the stale classifier
+  `requests_human` label is dropped on re-runs, and escalation keywords match whole words
+  ("personally" no longer escalates). Verified live with `livecall.py --human`: the agent asks
+  what exactly is broken, clarifies repair vs replacement, then hands off. Eval 31/31, smoke 9/9.
+- **`end_call` built-in tool** is on the agent; the prompt says to say the closing line once and
+  end the call on `close_with_refund` / `handoff`, instead of looping "would you like to finalize".
 - **Nebius live.** `classify.py` on `openai/gpt-oss-120b`, `reasoning_effort=low`, JSON mode,
   `max_tokens=400` (its hidden reasoning counts against the budget; 160 truncated it). Measured
   sequentially: 0.55–1.2 s per call, zero timeouts across the self-test, a live ElevenLabs call
@@ -338,6 +346,9 @@ speaker notes, Q&A prep and the measured/illustrative table are in `SLIDES.md`.
   time, so this only bites if you run `smoke.py` while someone is on the phone. Don't.
 - **The ElevenLabs simulate-conversation API mocks tools** (returns "Tool Called." without
   hitting the webhook). It proves nothing about wiring; use `livecall.py`.
+- **The agent may answer "I want a human" with `customer_declined`.** The server now folds decline
+  words into the engine transcript so escalation fires anyway; the prompt also says to call
+  `decide_return` for it. Never rely on the model picking the right tool for a guardrail.
 - **The agent may call `customer_declined` on an acceptance** if the tool description is soft.
   The current description says NEVER on accept/thanks/goodbye; verified on the A1077 accept path.
 - **`must_not_say` in tool responses is the list of words the model must avoid.** It is the one
