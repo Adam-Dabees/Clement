@@ -127,6 +127,7 @@
       <button onclick="go()">Decide</button>
       <button class="ghost" onclick="decline()">Customer declines</button>
       <button class="ghost" onclick="reset()" title="Clears every call collected on this machine">Reset collected data</button>
+      <button class="ghost" onclick="location.href='/api/export'" title="Downloads every call collected on this machine, with classifier labels and every option scored">Export JSON</button>
     </div>
     <div class="say" id="say" style="display:none">
       <div class="who">Agent</div>

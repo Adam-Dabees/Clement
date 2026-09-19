@@ -17,6 +17,7 @@ from datetime import datetime
 
 from dotenv import load_dotenv
 from fastapi import FastAPI
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -327,6 +328,23 @@ def get_log():
         "retention_rate": round(retained / len(CALL_LOG) * 100, 1) if CALL_LOG else 0.0,
         "escalations": sum(1 for c in CALL_LOG if c["escalated"]),
     }
+
+
+@app.get("/api/export")
+def export_log():
+    """Everything collected on this machine, as a JSON file download.
+    Internal: cost basis, classifier labels, declines and all scored options."""
+    log = get_log()
+    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    body = {
+        "exported_at": datetime.now().isoformat(timespec="seconds"),
+        "merchant_id": "harlow",
+        "policy": POLICY,
+        "totals": {k: log[k] for k in ("total_calls", "margin_saved", "retention_rate", "escalations")},
+        "calls": log["calls"],
+    }
+    return JSONResponse(body, headers={
+        "Content-Disposition": f'attachment; filename="clement-calls-{stamp}.json"'})
 
 
 @app.get("/api/agent")
