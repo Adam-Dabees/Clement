@@ -46,6 +46,9 @@ brew install cloudflared      # once
 ./tunnel.sh                   # tunnel -> PUBLIC_URL in .env -> setup_agent.py
 ```
 
+The agent runs on `gpt-4.1` (A/B'd against seven others on the live agent; see ELEVENLABS.md §4).
+Override with `ELEVENLABS_LLM=<model> ./tunnel.sh`.
+
 `tunnel.sh` starts a cloudflared quick tunnel, writes the URL to `.env`, and runs
 `setup_agent.py`, which creates the agent and three webhook tools the first time and
 **updates them in place** every time after (ids in `.clement_agent.json`). It writes

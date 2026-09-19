@@ -60,6 +60,7 @@ async def run(lines):
             """Collect events until the agent has spoken and gone quiet for 1.5 s."""
             nonlocal conv_id
             spoke, last = False, time.time()
+            t_sent = time.time()
             while True:
                 try:
                     raw = await asyncio.wait_for(ws.recv(), 1.5 if spoke else timeout)
@@ -77,7 +78,8 @@ async def run(lines):
                     conv_id = ev["conversation_initiation_metadata_event"]["conversation_id"]
                     print(f"conversation_id {conv_id}")
                 elif t == "agent_response":
-                    print(f"[agent] {ev['agent_response_event']['agent_response'].strip()}")
+                    lat = "" if spoke else f" ({time.time() - t_sent:.1f}s)"
+                    print(f"[agent]{lat} {ev['agent_response_event']['agent_response'].strip()}")
                     spoke = True
                 elif t == "agent_response_correction":
                     print(f"[agent, corrected] {ev['agent_response_correction_event']['corrected_agent_response'].strip()}")

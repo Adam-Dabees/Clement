@@ -60,7 +60,11 @@ Definitions:
   "Wrong shade of grey" or "too tight" is changed_mind, not defect.
 - not_delivered: the package never arrived. item_status is then never_arrived.
 - condition: ONLY from what they actually said. unopened if they say it is sealed, unopened, never used;
-  damaged if they describe physical damage; used if they say they used, wore, washed or slept on it.
+  damaged ONLY for visible physical damage to the item itself (cracked, torn, dented, ripped, stained,
+  scuffed, leaking from a crack). A part that does not work, a dead button, a motor that stopped, is a
+  defect with condition "used" if they have used it, otherwise "unknown"; it is not "damaged".
+  used if they say they used, wore, washed or slept on it. "It's broken" alone says nothing about
+  visible damage or use: condition "unknown".
   If the words say nothing about whether it was opened or used, condition is "unknown". Never guess:
   "I don't like it" or "wrong colour" alone is unknown.
 - wants_replacement: true only if they ask for the same item again (replacement, exchange, another one).

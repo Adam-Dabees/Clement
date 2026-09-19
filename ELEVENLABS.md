@@ -72,7 +72,7 @@ Escalation (over $400 cap, or caller asks for a person) short-circuits at turn 4
 
 | Setting | Value | Why |
 |---|---|---|
-| LLM | GPT-4o-mini | Fast first token, reliable tool calling. Sonnet/4o double latency for no gain on a five-turn call. |
+| LLM | **gpt-4.1** (was GPT-4o-mini) | A/B on the live agent 15:10 with `livecall.py`, same prompt and tools: **gpt-4o-mini** narrated "let me check your order" and never called `lookup_order` on a real spoken call, then invented "your order is found". **gpt-5-mini** fabricated the customer's words in a `decide_return` transcript. **gemini-2.5-flash** and **claude-haiku-4-5** offered outcomes without calling `decide_return`. **gpt-4.1-mini** invented a replacement request. **gpt-4.1**, **gpt-5.4-mini** and **gemini-3.5-flash** all called the tools correctly at 1–3.5 s per turn; gpt-4.1 also passed the human / decline / vague scripts. Override with `ELEVENLABS_LLM`. |
 | Temperature | 0.2 **[current]** | Consistency. Same call twice should sound alike. |
 | Max tokens | 120 **[current]** | Hard cap on rambling. Prompt caps sentences; this caps the model physically. |
 | First message | Hardcoded greeting | Swap for dynamic-variable greeting with `customer_name` if time allows. |

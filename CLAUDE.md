@@ -3,7 +3,7 @@
 > Read fully before doing anything. Last updated **2026-09-19 13:35 PDT** (hackathon day,
 > freeze at 16:30). If you are a Claude Code session on a different laptop: the plan in
 > §"Execution plan" is what we are running. Ask what time it is and which checkpoint was
-> reached before proposing work. §"Current state" says what landed on `main` at 14:50.
+> reached before proposing work. §"Current state" says what landed on `main` at 15:25.
 > **Voice is live (13:55)** and **Nebius is live (14:25):** a real ElevenLabs conversation calls all
 > three tools through the tunnel, the classifier labels it in ~1 s, and a row lands on Live.
 
@@ -255,9 +255,19 @@ Each exists to demonstrate one thing. Do not delete one without replacing its ca
 
 ---
 
-## Current state (14:50, on `main`)
+## Current state (15:25, on `main`)
 
 **Working and tested:**
+- **Agent LLM is gpt-4.1 (15:20).** A spoken A1150 call on gpt-4o-mini contained zero tool calls:
+  it said "let me check your order", waited, then claimed the order was found. A/B of eight models
+  on the live agent (ELEVENLABS.md §4): gpt-4.1 passes accept / human / decline / vague; gpt-5-mini
+  fabricated the customer's words; two others skipped `decide_return`. Prompt now says tools are
+  actions ("never say you are checking something; check it") and forbids stating order facts that
+  did not come from `lookup_order`.
+- **Classifier `condition` is evidence-only.** `unknown` unless the words say opened/used/damaged;
+  `damaged` only for visible physical damage (a dead button is `used`, so A1042 keeps its
+  "ship it back" story). Verified live: A1042 dead button → full refund with return → handoff on
+  "I want a human".
 - **Escalation from anywhere in the call (14:45).** First spoken test showed "I want to speak to a
   human" mid-negotiation going to `customer_declined`, whose re-run never saw the new words. Now
   every decline carries the customer's words into the engine's transcript, the stale classifier
@@ -346,6 +356,10 @@ speaker notes, Q&A prep and the measured/illustrative table are in `SLIDES.md`.
   time, so this only bites if you run `smoke.py` while someone is on the phone. Don't.
 - **The ElevenLabs simulate-conversation API mocks tools** (returns "Tool Called." without
   hitting the webhook). It proves nothing about wiring; use `livecall.py`.
+- **The model can narrate instead of calling the tool** ("let me check", then nothing) and then
+  hallucinate the result. Seen on gpt-4o-mini in a real spoken call. The prompt forbids it and the
+  LLM is gpt-4.1 now; if it recurs, the A/B loop is `ELEVENLABS_LLM=<model> python setup_agent.py`
+  then `livecall.py`.
 - **A guessed condition lowers the offer.** On "I don't like it" both the agent and the classifier
   said `unopened` at 0.94 confidence with zero evidence, turning 39% ($85.02) into 30% ($65.40).
   Now the classifier answers `unknown` unless the words say opened/used/damaged (no override), and
