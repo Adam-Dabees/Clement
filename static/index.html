@@ -4,6 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Clement</title>
+<link rel="icon" href="brand/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="brand/favicon-32.png" sizes="32x32">
+<link rel="apple-touch-icon" href="brand/apple-touch-icon.png">
 <style>
   :root {
     --bg: #fbfaf8;
@@ -12,6 +15,7 @@
     --ink: #1c1a17;
     --muted: #6f6a62;
     --accent: #1f6f54;
+    --gold: #d9a441;
     --warn: #9a5b1e;
     --radius: 10px;
   }
@@ -38,6 +42,8 @@
   .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 16px; margin-bottom: 40px; }
   .stat { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 22px 24px; }
   .stat .n { font-size: 30px; font-weight: 600; letter-spacing: -0.02em; }
+  .stat { border-top: 3px solid var(--accent); }
+  .stat:nth-child(2) { border-top-color: var(--gold); }
   .stat .l { color: var(--muted); font-size: 13px; margin-top: 4px; }
   .accent { color: var(--accent); }
   h2 { font-size: 13px; font-weight: 600; text-transform: uppercase;
@@ -53,7 +59,7 @@
   input[type=checkbox] { min-width: 0; flex: 0 0 auto; width: 16px; height: 16px; padding: 0; margin: 0; accent-color: var(--accent); }
   button { background: var(--accent); color: #fff; border: none; cursor: pointer; font-weight: 500; }
   button.ghost { background: transparent; color: var(--muted); border: 1px solid var(--line); }
-  .say { margin-top: 20px; padding: 18px 20px; border-left: 3px solid var(--accent);
+  .say { margin-top: 20px; padding: 18px 20px; border-left: 3px solid var(--gold);
          background: var(--bg); border-radius: 0 7px 7px 0; }
   .say .who { font-size: 12px; color: var(--muted); margin-bottom: 6px;
               text-transform: uppercase; letter-spacing: 0.06em; }
@@ -74,7 +80,7 @@
 <div class="wrap">
 
   <header>
-    <h1>Clement</h1>
+    <picture><source srcset="brand/clement-lockup-dark.svg" media="(prefers-color-scheme: dark)"><img src="brand/clement-lockup.svg" alt="Clement" style="height:34px;width:auto;display:block;margin-bottom:10px"></picture>
     <p class="sub">Every return is a margin decision. This one gets made.</p>
     <p class="sub" style="margin-top:10px"><a href="/business.html">Open the merchant console →</a></p>
   </header>
