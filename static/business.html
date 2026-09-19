@@ -1964,7 +1964,7 @@ function showCall(i) {
           <div class="kv">${kv("Reason", esc(c.reason))}${kv("Condition used", esc(c.condition))}${kv("Declines", c.refusals ?? 0)}</div>
           <ul style="margin:8px 0 0 18px;padding:0;font-size:13px">${decl}</ul>
           <p class="eyebrow" style="margin-top:16px">Classifier &middot; Nebius</p>
-          ${lab ? `<div class="kv">${kv("Return type", esc(lab.return_type))}${kv("Item status", esc(lab.item_status))}${kv("Condition", esc(lab.condition) )}${kv("Wants replacement", lab.wants_replacement)}${kv("Requests human", lab.requests_human)}${kv("Confidence", conf || Number(lab.confidence).toFixed(2))}${kv("Latency", (lab.latency_ms || 0) + " ms")}${kv("Model", `<span class="mono" style="font-size:11px">${esc(lab.model)}</span>`)}</div>`
+          ${lab ? `<div class="kv">${kv("Return type", esc(lab.return_type))}${kv("Item status", esc(lab.item_status))}${kv("Condition", esc(lab.condition) )}${kv("Wants replacement", lab.wants_replacement ?? "—")}${kv("Requests human", lab.requests_human ?? "— (re-checked from their words on each decline)")}${kv("Confidence", conf || Number(lab.confidence).toFixed(2))}${kv("Latency", (lab.latency_ms || 0) + " ms")}${kv("Model", `<span class="mono" style="font-size:11px">${esc(lab.model)}</span>`)}</div>`
                 : `<p class="sub">Not available on this call: keyword fallback decided the inputs.</p>`}
         </div>
         <div>
