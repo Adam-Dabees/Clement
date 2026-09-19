@@ -3,9 +3,9 @@
 > Read fully before doing anything. Last updated **2026-09-19 13:35 PDT** (hackathon day,
 > freeze at 16:30). If you are a Claude Code session on a different laptop: the plan in
 > §"Execution plan" is what we are running. Ask what time it is and which checkpoint was
-> reached before proposing work. §"Current state" says what landed on `main` at 14:05.
-> **Voice is live (13:55):** the integration checkpoint passed with a real ElevenLabs conversation
-> calling all three tools through the tunnel and landing a row on Live.
+> reached before proposing work. §"Current state" says what landed on `main` at 14:30.
+> **Voice is live (13:55)** and **Nebius is live (14:25):** a real ElevenLabs conversation calls all
+> three tools through the tunnel, the classifier labels it in ~1 s, and a row lands on Live.
 
 ---
 
@@ -96,7 +96,7 @@ decides an outcome. Its second honest use is parsing the merchant's policy docum
 |---|---|---|
 | `engine.py` | main | **The IP.** Pure functions. No model calls, no network, no randomness. Takes an order, what the customer said, and optional classifier `labels`; returns chosen outcome, explicit fallback (always the full refund), margin delta, reason code, policy flags. |
 | `data.py` | main | Mock orders with real cost structure (+ `merchant_id`, `customer_email`, `category`) plus the `POLICY` envelope (+ `min_classifier_confidence`). |
-| `classify.py` | main | Nebius Token Factory intake classifier. Returns labels + per-field confidence, or `None` on any failure (no key, 2.5s timeout, bad JSON). Never decides. |
+| `classify.py` | main | Nebius Token Factory intake classifier on `openai/gpt-oss-120b` (reasoning effort low, ~0.7 s median, 1.1 s max measured). Returns labels + per-field confidence, or `None` on any failure (no key, 2.5s timeout, bad JSON). Never decides. |
 | `server.py` | main | FastAPI. Three webhook tools (`lookup_order`, `decide_return`, `customer_declined`), `/api/log`, `/api/agent`, `/api/health`, `/api/reset`. Tool responses are the ELEVENLABS.md §6.2 shape (`outcome`, `amount`, `alternative`, `next_step`, `say`…); `_safe()` refuses to return a cost field. One log row per conversation. Mounts `static/` at `/`. |
 | `setup_agent.py` | main | Creates **or updates in place** the ElevenLabs tools and agent (`.clement_agent.json` holds ids). Binds `conversation_id` to `system__conversation_id`. `--dry-run` verified; **not yet run against a live key.** |
 | `tunnel.sh` | main | cloudflared quick tunnel → `PUBLIC_URL` in `.env` → `setup_agent.py`. Re-run on every tunnel restart. |
@@ -255,9 +255,15 @@ Each exists to demonstrate one thing. Do not delete one without replacing its ca
 
 ---
 
-## Current state (14:05, on `main`)
+## Current state (14:30, on `main`)
 
 **Working and tested:**
+- **Nebius live.** `classify.py` on `openai/gpt-oss-120b`, `reasoning_effort=low`, JSON mode,
+  `max_tokens=400` (its hidden reasoning counts against the budget; 160 truncated it). Measured
+  sequentially: 0.55–1.2 s per call, zero timeouts across the self-test, a live ElevenLabs call
+  (labels `changed_mind / in_hand / used`, 1079 ms, `classifier_fallback=false`) and all eight
+  smoke sequences. Llama 3.1 8B no longer exists on Nebius; Qwen3-30B-A3B was 1.8 s median and
+  timed out under load; gemma reports meaningless confidences.
 - **Voice live.** Agent `agent_0201m2xp7s21fcb9nh0nn7c62vcx` (gpt-4o-mini, 0.2, 120 tokens,
   auth disabled, widget renders on `/`). `livecall.py` ran the A1077 accept path (partial $85.02
   accepted, no spurious decline call, row +$180.98) and the A1188 two-decline path (partial →
@@ -281,8 +287,6 @@ Each exists to demonstrate one thing. Do not delete one without replacing its ca
 **Not done:**
 - **A real microphone call on stage.** Text over the WebSocket is proven; a spoken call adds ASR
   and TTS only. Do one before rehearsal.
-- **Nebius live.** No `NEBIUS_API_KEY` yet. When it arrives: `.env`, then
-  `.venv/bin/python classify.py` to see labels and latency. Engine is proven on both paths.
 - Engine fixes 6 and 7 (deferred, see above).
 - Nebius policy-doc parse (onboarding stays canned).
 
@@ -329,6 +333,9 @@ speaker notes, Q&A prep and the measured/illustrative table are in `SLIDES.md`.
 - **Port 8000 on Adam's laptop is the user-started `--reload` server.** Don't start a second one
   there; use 8010 for scripted tests.
 - **`business.html` lives in `static/` now** and is served at `/business.html`.
+- **Requests on one Nebius key queue up.** Two classifier calls in flight at once pushed latency
+  from 0.8 s to 2.5 s+ and half of them timed out to keyword fallback. The demo is one call at a
+  time, so this only bites if you run `smoke.py` while someone is on the phone. Don't.
 - **The ElevenLabs simulate-conversation API mocks tools** (returns "Tool Called." without
   hitting the webhook). It proves nothing about wiring; use `livecall.py`.
 - **The agent may call `customer_declined` on an acceptance** if the tool description is soft.

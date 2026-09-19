@@ -147,7 +147,8 @@ def main(base):
     lo = c.post("/tool/lookup_order", order_id="zz")
     check(lo["found"] is False, "lookup unknown")
     k = cid()
-    d = c.post("/tool/decide_return", order_id="A1077", reason="wrong shade", condition="Brand New", conversation_id=k)
+    d = c.post("/tool/decide_return", order_id="A1077", reason="wrong shade", condition="Brand New", conversation_id=k,
+               transcript="wrong shade of grey, I never opened it, still sealed in the bag")
     check(d["outcome"] == "partial_refund_keep_item" and d["amount"] == 65.4, f"condition normalised {d['amount']}")
     n_expected_rows += 1
 

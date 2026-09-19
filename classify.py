@@ -9,7 +9,8 @@ timeout, bad JSON, missing field. The engine then runs on keywords.
     python classify.py "one speed stopped working and I want a manager"
 
 Env: NEBIUS_API_KEY, NEBIUS_BASE_URL (default Token Factory),
-     NEBIUS_MODEL (default Llama 3.1 8B fast), CLASSIFY_TIMEOUT_S (2.5).
+     NEBIUS_MODEL (default openai/gpt-oss-120b), CLASSIFY_TIMEOUT_S (2.5),
+     CLASSIFY_MAX_TOKENS (400; gpt-oss reasoning counts against it).
 """
 
 import json
@@ -22,7 +23,17 @@ from dotenv import load_dotenv
 load_dotenv()
 
 BASE_URL = os.environ.get("NEBIUS_BASE_URL", "https://api.tokenfactory.nebius.com/v1/")
-MODEL = os.environ.get("NEBIUS_MODEL", "meta-llama/Meta-Llama-3.1-8B-Instruct-fast")
+# Llama 3.1 8B was retired from Nebius (2026-09). Measured 2026-09-19, sequential:
+#   openai/gpt-oss-120b            ~0.8 s, valid JSON, correct labels  <- default
+#   Qwen/Qwen3-30B-A3B-Instruct    ~1.8 s median, 2.5 s+ under load
+#   gemma-3-27b                    ~1.6 s but meaningless confidences
+# gpt-oss keeps its reasoning in a separate field that still counts against
+# max_tokens, so the budget must stay well above the JSON itself.
+# Requests on one key queue: never run two classifier calls concurrently.
+MODEL = os.environ.get("NEBIUS_MODEL", "openai/gpt-oss-120b")
+MAX_TOKENS = int(os.environ.get("CLASSIFY_MAX_TOKENS", "400"))
+# "low" halves gpt-oss latency (0.7 s median vs 1.0 s) with identical labels.
+REASONING_EFFORT = os.environ.get("CLASSIFY_REASONING_EFFORT", "low")
 TIMEOUT_S = float(os.environ.get("CLASSIFY_TIMEOUT_S", "2.5"))
 
 RETURN_TYPES = ("defect", "changed_mind", "wrong_item", "not_delivered", "other")
@@ -37,7 +48,6 @@ Reply with exactly one JSON object and nothing else:
  "condition": "unopened" | "used" | "damaged",
  "wants_replacement": true | false,
  "requests_human": true | false,
- "sentiment": "calm" | "frustrated" | "angry",
  "confidence": {"return_type": 0.0-1.0, "item_status": 0.0-1.0, "condition": 0.0-1.0,
                 "wants_replacement": 0.0-1.0, "requests_human": 0.0-1.0}}
 
@@ -80,15 +90,27 @@ def classify(reason, transcript="", order_ctx=None):
         r = client.chat.completions.create(
             model=MODEL,
             temperature=0,
-            max_tokens=220,
+            max_tokens=MAX_TOKENS,
             response_format={"type": "json_object"},
+            reasoning_effort=REASONING_EFFORT,
             messages=[{"role": "system", "content": SYSTEM},
                       {"role": "user", "content": user}],
         )
-        raw = json.loads(r.choices[0].message.content)
+        raw = _parse_json(r.choices[0].message.content or "")
         return _to_labels(raw, int((time.time() - t0) * 1000))
     except Exception:
         return None
+
+
+def _parse_json(text):
+    """The object itself, even if the model wrapped it in fences or a preamble."""
+    try:
+        return json.loads(text)
+    except ValueError:
+        start, end = text.find("{"), text.rfind("}")
+        if start < 0 or end <= start:
+            raise
+        return json.loads(text[start:end + 1])
 
 
 def _to_labels(raw, latency_ms):
@@ -121,7 +143,6 @@ def _to_labels(raw, latency_ms):
         "wants_replacement": bool(raw.get("wants_replacement")),
         "requests_human": bool(raw.get("requests_human")),
         "return_type": rt,
-        "sentiment": raw.get("sentiment"),
         "confidences": confidences,
         "confidence": min(confidences.values()),
         "latency_ms": latency_ms,

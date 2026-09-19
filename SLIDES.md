@@ -153,7 +153,7 @@ example".)*
 | Sponsor | What we used it for | Where it shows |
 |---|---|---|
 | ElevenLabs | Voice where a form can't negotiate; tone as a signal | The call |
-| Nebius | Intake classifier; policy-doc → envelope (two honest uses, never the decision) | Onboarding step 1, review queue |
+| Nebius | Intake classifier (live, ~1 s, gpt-oss-120b); policy-doc → envelope planned (never the decision) | Live page classifier column, review queue |
 | Sazze | Return margin is the product | Every number on the console |
 | Founder Institute | A business model that states itself | Slide 9 |
 
@@ -172,6 +172,7 @@ the decision engine sees all of it. We take the returns line."
 |---|---|---|
 | 28/28 eval accuracy, 14% escalation, $1,501.44 saved, 23.2% over baseline | `python eval.py` (14:05) | measured |
 | Live ElevenLabs call, A1077: tools fired through the tunnel, row +$180.98; A1188 two declines → +$11.50 | `livecall.py` 13:55 | measured |
+| Nebius classifier (gpt-oss-120b): 0.55–1.2 s per call, 0 timeouts over 13 calls, labels correct | `classify.py`, `smoke.py`, `livecall.py` 14:25 | measured |
 | A1077: 39% back = $85.02, +$180.98 vs baseline; two declines → $218 returnless, +$48.00 | `/api/log` on stage | measured |
 | Per-order cost structure (A1042…A1188) | `data.py` | measured (mock, realistic) |
 | $61,400 hero, 2,847 returns, CSAT 4.46, dial curve | `business.html` seeds | illustrative |

@@ -72,9 +72,10 @@ Run it after every `./tunnel.sh`. If it reports no log row, the tool URLs are st
 
 `classify.py` is the intake classifier: it turns a rambling spoken complaint into
 labels (`is_defect`, `item_status`, `condition`, `wants_replacement`, `requests_human`,
-per-field confidence) before the engine runs. It runs on Nebius Token Factory
-(formerly AI Studio) through the OpenAI SDK with a 2.5 s timeout and returns `None` on
-any failure, at which point the engine falls back to keyword matching. It never decides
+per-field confidence) before the engine runs. It runs `openai/gpt-oss-120b` on Nebius
+Token Factory (formerly AI Studio) through the OpenAI SDK, about 0.7 s per call, with a
+2.5 s timeout, and returns `None` on any failure, at which point the engine falls back to
+keyword matching. Don't run two classifier calls at once on one key: they queue. It never decides
 an outcome. Below 0.6 confidence the engine treats the return as a defect: ambiguity
 resolves in the customer's favour.
 
