@@ -16,8 +16,16 @@ open ClementCall.xcodeproj   # pick your device, Run
 ```
 
 Needs iOS 17 and a microphone. `ELEVENLABS_AGENT_ID` in the scheme's environment overrides
-the built-in agent id. The keypad button types a message instead of speaking, which is how
-you drive it in the simulator.
+the built-in agent id. The keypad button types a message instead of speaking.
+
+Audio: the engine builds the playback graph, then enables voice processing (echo
+cancellation) on the input, then installs the mic tap, in that order. Enabling voice
+processing before the playback graph exists leaves the input silent with no error; that was
+the "no user response" bug. A watchdog restarts without voice processing if no input arrives
+within 2.5 s. On speakerphone the mic is gated while the agent's audio plays, so the agent
+never hears itself; on the earpiece it stays full duplex. Launch argument `-novp` skips voice
+processing outright. Debug builds print `[mic  ]` lines with the input format, route, chunk
+counts and peak level.
 
 Scripted test drive (Debug builds), mirrors `livecall.py`:
 

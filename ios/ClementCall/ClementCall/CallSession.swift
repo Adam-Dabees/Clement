@@ -97,7 +97,11 @@ final class CallSession: ObservableObject {
 
         let pipeline = AudioPipeline(sampleRate: 16_000)
         pipeline.isMuted = isMuted
+        pipeline.voiceProcessing = !CommandLine.arguments.contains("-novp")
         pipeline.onMicChunk = { [weak socket] chunk in socket?.sendAudio(chunk) }
+        pipeline.onDiagnostic = { [weak self] message in
+            Task { @MainActor in self?.debugLog("[mic  ] " + message) }
+        }
         do {
             try pipeline.start(speaker: speakerOn)
             audio = pipeline
