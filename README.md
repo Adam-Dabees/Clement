@@ -65,6 +65,7 @@ WebSocket, so the webhooks, tunnel, engine and log all run for real.
 .venv/bin/python livecall.py             # A1077: partial keep-it offer, accepted
 .venv/bin/python livecall.py --decline   # A1188: decline twice, refund without return
 .venv/bin/python livecall.py --human     # A1042: asks for a person mid-call, hands off
+.venv/bin/python livecall.py --vague     # A1077: "I don't like it", answers "okay" to two options
 ```
 
 Run it after every `./tunnel.sh`. If it reports no log row, the tool URLs are stale.

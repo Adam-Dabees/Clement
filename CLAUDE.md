@@ -102,7 +102,7 @@ decides an outcome. Its second honest use is parsing the merchant's policy docum
 | `tunnel.sh` | main | cloudflared quick tunnel → `PUBLIC_URL` in `.env` → `setup_agent.py`. Re-run on every tunnel restart. |
 | `eval.py` | main | 31 labelled cases (decision, reason code, fallback, escalation; labels on and off). **Must pass before any engine change counts.** |
 | `smoke.py` | main | Scripted demo sequences against a running server (`--port 8010`). Asserts Rule 2 on every tool response. |
-| `livecall.py` | main | Drives the **real** ElevenLabs agent over its WebSocket with typed text: exercises tools, tunnel, engine and log without a microphone. `--decline` (A1188), `--human` (A1042, asks for a person mid-call). Run it after every `tunnel.sh`. |
+| `livecall.py` | main | Drives the **real** ElevenLabs agent over its WebSocket with typed text: exercises tools, tunnel, engine and log without a microphone. `--decline` (A1188), `--human` (A1042, asks for a person mid-call), `--vague` (A1077, "I don't like it", ambiguous "okay"). Run it after every `tunnel.sh`. |
 | `static/index.html` | main | Demo console: stat tiles, decision log, voice widget (mounts from `/api/agent`), text fallback driving the same backend. |
 | `static/business.html` | main | **Merchant console.** Onboarding (3 steps) + six pages. Only **Live** is wired (`/api/log`, 4s poll, 1.2s abort, seeded fallback). Served at `/business.html`. |
 | `SLIDES.md` | main (untracked until committed) | The pitch, run of show, Q&A prep, and which numbers are measured vs illustrative. Edit alongside the build. |
@@ -346,6 +346,14 @@ speaker notes, Q&A prep and the measured/illustrative table are in `SLIDES.md`.
   time, so this only bites if you run `smoke.py` while someone is on the phone. Don't.
 - **The ElevenLabs simulate-conversation API mocks tools** (returns "Tool Called." without
   hitting the webhook). It proves nothing about wiring; use `livecall.py`.
+- **A guessed condition lowers the offer.** On "I don't like it" both the agent and the classifier
+  said `unopened` at 0.94 confidence with zero evidence, turning 39% ($85.02) into 30% ($65.40).
+  Now the classifier answers `unknown` unless the words say opened/used/damaged (no override), and
+  the prompt asks once, naturally, then defaults to `used`. Never let a guess move money.
+- **The agent read the tool enum out loud** ("unopened, used, or damaged? replacement or refund?")
+  and processed a partial on a bare "okay". Prompt now: one question per turn, acknowledge first,
+  never voice tool options, and an ambiguous answer after two options gets "which one?" first.
+  Replay with `livecall.py --vague`.
 - **The agent may answer "I want a human" with `customer_declined`.** The server now folds decline
   words into the engine transcript so escalation fires anyway; the prompt also says to call
   `decide_return` for it. Never rely on the model picking the right tool for a guardrail.

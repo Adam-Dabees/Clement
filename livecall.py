@@ -6,6 +6,7 @@ microphone. This is the integration checkpoint you can run from a shell.
     .venv/bin/python livecall.py                      # A1077 accept path
     .venv/bin/python livecall.py --decline            # A1188 two-decline path
     .venv/bin/python livecall.py --human              # A1042, asks for a human mid-call -> handoff
+    .venv/bin/python livecall.py --vague              # A1077, "I don't like it", ambiguous "okay"
     .venv/bin/python livecall.py "A1150" "it's leaking from the group head"
 
 Needs ELEVENLABS_AGENT_ID in .env (written by setup_agent.py) and the agent
@@ -33,6 +34,12 @@ SCRIPTS = {
                "It's just the wrong shade of grey, way darker than the photo. I opened it and slept "
                "under it one night. It's not damaged.",
                "I'll take the money and keep it, thanks. Bye."],
+    "vague": ["A1077",
+              "I don't like it.",
+              "I want a refund because I don't like it.",
+              "I've slept under it a couple of nights.",
+              "Okay.",
+              "The money now, I'll keep it."],
     "human": ["A1042",
               "It's broken.",
               "One of the speed buttons doesn't do anything. I'd like you to fix it.",
@@ -98,7 +105,8 @@ async def run(lines):
 def main():
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
     lines = (SCRIPTS["decline"] if "--decline" in sys.argv else
-             SCRIPTS["human"] if "--human" in sys.argv else (args or SCRIPTS["accept"]))
+             SCRIPTS["human"] if "--human" in sys.argv else
+             SCRIPTS["vague"] if "--vague" in sys.argv else (args or SCRIPTS["accept"]))
     t0 = time.time()
     conv_id = asyncio.run(run(lines))
     print(f"\ncall took {time.time() - t0:.0f}s")

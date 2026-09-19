@@ -38,14 +38,14 @@ TIMEOUT_S = float(os.environ.get("CLASSIFY_TIMEOUT_S", "2.5"))
 
 RETURN_TYPES = ("defect", "changed_mind", "wrong_item", "not_delivered", "other")
 ITEM_STATUS = ("in_hand", "never_arrived")
-CONDITIONS = ("unopened", "used", "damaged")
+CONDITIONS = ("unopened", "used", "damaged")      # "unknown" maps to None: no override
 DEFECT_TYPES = {"defect", "wrong_item"}     # merchant's fault either way
 
 SYSTEM = """You label one spoken product-return complaint for an online store's returns line.
 Reply with exactly one JSON object and nothing else:
 {"return_type": "defect" | "changed_mind" | "wrong_item" | "not_delivered" | "other",
  "item_status": "in_hand" | "never_arrived",
- "condition": "unopened" | "used" | "damaged",
+ "condition": "unopened" | "used" | "damaged" | "unknown",
  "wants_replacement": true | false,
  "requests_human": true | false,
  "confidence": {"return_type": 0.0-1.0, "item_status": 0.0-1.0, "condition": 0.0-1.0,
@@ -59,7 +59,10 @@ Definitions:
   for their room, wrong size or fit, no longer needed, did not like it. Customer preference.
   "Wrong shade of grey" or "too tight" is changed_mind, not defect.
 - not_delivered: the package never arrived. item_status is then never_arrived.
-- condition: unopened if never opened or used; damaged if physically damaged; otherwise used.
+- condition: ONLY from what they actually said. unopened if they say it is sealed, unopened, never used;
+  damaged if they describe physical damage; used if they say they used, wore, washed or slept on it.
+  If the words say nothing about whether it was opened or used, condition is "unknown". Never guess:
+  "I don't like it" or "wrong colour" alone is unknown.
 - wants_replacement: true only if they ask for the same item again (replacement, exchange, another one).
 - requests_human: true only if they ask for a person, manager, supervisor, or threaten legal action.
 Give low confidence (below 0.6) whenever the words genuinely support more than one label."""
@@ -144,7 +147,8 @@ def _to_labels(raw, latency_ms):
         "requests_human": bool(raw.get("requests_human")),
         "return_type": rt,
         "confidences": confidences,
-        "confidence": min(confidences.values()),
+        "confidence": confidences["is_defect"],
+        "confidence_min": min(confidences.values()),
         "latency_ms": latency_ms,
         "model": MODEL,
     }
