@@ -70,8 +70,8 @@ def s(desc):
     return {"type": "string", "description": desc}
 
 
-CONVERSATION_ID = {"type": "string", "description": "The id of this conversation.",
-                   "dynamic_variable": "system__conversation_id"}
+# The API allows exactly one of description / dynamic_variable / constant_value here.
+CONVERSATION_ID = {"type": "string", "dynamic_variable": "system__conversation_id"}
 
 # (name, description that says WHEN to call, path, properties, required)
 TOOLS = [
