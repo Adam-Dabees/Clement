@@ -24,3 +24,8 @@ demo_recordings/
 
 # Local voice-agent state (ids from setup_agent.py)
 .clement_agent.json
+
+# iOS demo app (ios/ClementCall): Xcode build output and per-user state
+ios/ClementCall/build/
+xcuserdata/
+*.xcuserstate
