@@ -21,3 +21,6 @@ Thumbs.db
 # Local scratch
 *.log
 demo_recordings/
+
+# Local voice-agent state (ids from setup_agent.py)
+.clement_agent.json

@@ -87,7 +87,9 @@
   <div class="panel">
     <h2>Voice</h2>
     <p class="sub" style="margin-bottom:8px">Call the returns line. Try order A1042, A1077, A1103, A1150 or A1188.</p>
-    <!-- <elevenlabs-convai agent-id="PASTE_ID"></elevenlabs-convai>
+    <div id="voice-slot"><p class="sub" id="voice-note">Widget mounts here once <code>ELEVENLABS_AGENT_ID</code> is set (run <code>./tunnel.sh</code>).</p></div>
+    <!-- Manual fallback if /api/agent is unavailable:
+         <elevenlabs-convai agent-id="PASTE_ID"></elevenlabs-convai>
          <script src="https://unpkg.com/@elevenlabs/convai-widget-embed" async></script> -->
   </div>
 
@@ -102,6 +104,7 @@
         <option value="unopened">Unopened</option>
         <option value="damaged">Damaged</option>
       </select>
+      <label class="sub" style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="f-repl" style="min-width:0;flex:0">Wants replacement</label>
       <button onclick="go()">Decide</button>
       <button class="ghost" onclick="decline()">Customer declines</button>
       <button class="ghost" onclick="reset()">Reset</button>
@@ -109,6 +112,7 @@
     <div class="say" id="say" style="display:none">
       <div class="who">Agent</div>
       <div id="say-text"></div>
+      <div class="sub" id="say-meta" style="font-size:13px;margin-top:8px"></div>
     </div>
   </div>
 
@@ -132,36 +136,59 @@ for (const [k, v] of Object.entries(ORDERS)) {
   const o = document.createElement('option'); o.value = k; o.textContent = v; sel.appendChild(o);
 }
 
-const CID = "demo-" + Math.random().toString(36).slice(2, 8);
+let CID = null;   // one conversation per Decide click; declines belong to the last one
 
 async function go() {
+  CID = "text-" + Math.random().toString(36).slice(2, 8);
   const body = {
     order_id: sel.value,
     reason: document.getElementById('f-reason').value,
     condition: document.getElementById('f-cond').value,
-    wants_replacement: false,
+    wants_replacement: document.getElementById('f-repl').checked,
     conversation_id: CID,
     transcript: document.getElementById('f-reason').value,
   };
   const r = await fetch('/tool/decide_return', {
     method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)
   }).then(r => r.json());
-  show(r.say);
+  show(r.say, meta(r));
   refresh();
 }
 
 async function decline() {
+  if (!CID) { show("Decide first, then decline."); return; }
   const r = await fetch('/tool/customer_declined', {
     method: 'POST', headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({conversation_id: CID})
+    body: JSON.stringify({conversation_id: CID, customer_response: "no", sentiment: "calm"})
   }).then(r => r.json());
-  show(r.say);
+  show(r.say, `next_step: ${r.next_step}` + (r.stop_negotiating ? " · negotiation over" : ""));
+  refresh();
 }
 
-function show(t) {
+function meta(r) {
+  if (r.error) return "";
+  const alt = r.alternative ? ` · alternative: ${r.alternative.outcome.replace(/_/g, ' ')} $${r.alternative.amount.toFixed(2)}` : "";
+  return `next_step: ${r.next_step}${alt}`;
+}
+
+function show(t, m) {
   document.getElementById('say').style.display = 'block';
   document.getElementById('say-text').textContent = t;
+  document.getElementById('say-meta').textContent = m || '';
 }
+
+// Voice widget: mounted from /api/agent so nobody edits HTML per agent.
+fetch('/api/agent').then(r => r.json()).then(a => {
+  if (!a.agent_id) return;
+  const slot = document.getElementById('voice-slot');
+  slot.innerHTML = '';
+  const w = document.createElement('elevenlabs-convai');
+  w.setAttribute('agent-id', a.agent_id);
+  slot.appendChild(w);
+  const sc = document.createElement('script');
+  sc.src = 'https://unpkg.com/@elevenlabs/convai-widget-embed'; sc.async = true;
+  document.body.appendChild(sc);
+}).catch(() => {});
 
 async function reset() {
   await fetch('/api/reset', {method: 'POST'});
