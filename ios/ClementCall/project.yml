@@ -1,0 +1,35 @@
+name: ClementCall
+options:
+  bundleIdPrefix: com.rovalapps
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    SWIFT_STRICT_CONCURRENCY: minimal
+    DEVELOPMENT_TEAM: WPBZD3BH2S
+    CODE_SIGN_STYLE: Automatic
+    TARGETED_DEVICE_FAMILY: "1"
+    IPHONEOS_DEPLOYMENT_TARGET: "17.0"
+targets:
+  ClementCall:
+    type: application
+    platform: iOS
+    sources: [ClementCall]
+    info:
+      path: ClementCall/Info.plist
+      properties:
+        CFBundleDisplayName: Clement
+        CFBundleShortVersionString: "0.1"
+        CFBundleVersion: "1"
+        NSMicrophoneUsageDescription: Clement needs the microphone so you can talk to the returns agent.
+        UIBackgroundModes: [audio]
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        UIUserInterfaceStyle: Dark
+        ITSAppUsesNonExemptEncryption: false
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: NO
+        PRODUCT_BUNDLE_IDENTIFIER: com.rovalapps.ClementCall

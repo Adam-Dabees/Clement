@@ -1944,6 +1944,17 @@ addEventListener("resize", () => { clearTimeout(window._rz); window._rz = setTim
 
 /* ---------- boot ---------- */
 renderSteps();
+
+/* ---------- voice widget: same agent as the caller page, mounted from /api/agent ---------- */
+fetch("/api/agent").then(r => r.json()).then(a => {
+  if (!a.agent_id) return;
+  const w = document.createElement("elevenlabs-convai");
+  w.setAttribute("agent-id", a.agent_id);
+  document.body.appendChild(w);
+  const sc = document.createElement("script");
+  sc.src = "https://unpkg.com/@elevenlabs/convai-widget-embed"; sc.async = true;
+  document.body.appendChild(sc);
+}).catch(() => {});
 </script>
 </body>
 </html>
