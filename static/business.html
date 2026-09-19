@@ -570,10 +570,14 @@
       <div class="card" style="margin-top:22px">
         <div class="card-h">
           <div><h3>Decision log</h3>
-          <p class="sub" id="log-src">Live from the engine.</p></div>
-          <span class="pill" id="log-pill">&mdash;</span>
+          <p class="sub" id="log-src">Live from the engine. Click a row for everything collected on that call.</p></div>
+          <div class="row" style="gap:8px">
+            <span class="pill" id="log-pill">&mdash;</span>
+            <button class="btn ghost sm" onclick="resetLive()" title="Clears every call collected on this machine">Reset collected data</button>
+          </div>
         </div>
         <div class="t-scroll"><table id="log-t"></table></div>
+        <div id="log-detail"></div>
       </div>
     </section>
 
@@ -1889,6 +1893,7 @@ async function refreshLog() {
 
   const live = d && d.calls && d.calls.length;
   const calls = live ? d.calls : LOG_SEED;
+  LIVE_CALLS = live ? calls.slice(0, 8) : [];
   document.getElementById("log-pill").textContent = live
     ? `${d.total_calls} live` : "demo data";
   document.getElementById("log-pill").className = live ? "pill live" : "pill";
@@ -1912,9 +1917,65 @@ async function refreshLog() {
       `<span class="${c.margin_saved > 0 ? "up" : "sub"}">${c.margin_saved > 0 ? "+" : ""}${money2(c.margin_saved)}</span>`,
     ]));
   const t = document.getElementById("log-t");
+  let ri = 0;
   t.querySelectorAll("tr").forEach(tr => {
     [...tr.children].forEach((c, i) => { if (i < 4) c.classList.remove("num"); });
+    if (tr.querySelector("td")) {
+      const i = ri++;
+      tr.style.cursor = live ? "pointer" : "";
+      tr.onclick = live ? () => showCall(i) : null;
+      if (live && LIVE_CALLS[i] && LIVE_CALLS[i].conversation_id === OPEN_CALL) tr.style.background = "var(--sunk)";
+    }
   });
+  if (!live) document.getElementById("log-detail").innerHTML = "";
+  else if (OPEN_CALL) { const i = LIVE_CALLS.findIndex(c => c.conversation_id === OPEN_CALL); if (i >= 0) showCall(i); }
+}
+
+/* ---------- everything collected on one call ---------- */
+let LIVE_CALLS = [], OPEN_CALL = null;
+async function resetLive() {
+  try { await fetch("/api/reset", {method: "POST"}); } catch (e) {}
+  OPEN_CALL = null;
+  document.getElementById("log-detail").innerHTML = "";
+  refreshLog();
+}
+function showCall(i) {
+  const c = LIVE_CALLS[i]; if (!c) return;
+  OPEN_CALL = c.conversation_id;
+  const esc = s => String(s ?? "—").replace(/&/g, "&amp;").replace(/</g, "&lt;");
+  const usd = n => "$" + Number(n || 0).toFixed(2);
+  const kv = (k, v) => `<span class="k">${k}</span><span class="v">${v}</span>`;
+  const lab = c.classifier;
+  const decl = (c.declines || []).length
+    ? c.declines.map(d => `<li>Decline ${d.n}: &ldquo;${esc(d.said) || "(no words captured)"}&rdquo; <span class="sub">${esc(d.sentiment) || ""}</span></li>`).join("")
+    : `<li class="sub">none</li>`;
+  const conf = lab && lab.confidences ? Object.entries(lab.confidences).map(([k, v]) => `${k} ${Number(v).toFixed(2)}`).join(" &middot; ") : "";
+  const opts = (c.options || []).map(o => `<tr><td>${esc(o.label)}${o.action === c.decision ? ' <span class="pill">chosen</span>' : ""}</td><td class="num">${usd(o.customer_gets)}</td><td class="num">${usd(o.net_to_merchant)}</td></tr>`).join("");
+  document.getElementById("log-detail").innerHTML = `
+    <div class="card" style="background:var(--sunk);padding:16px 18px;margin-top:14px">
+      <div class="card-h" style="margin-bottom:10px">
+        <div><h3 style="font-size:14px">${esc(c.item)} &middot; <span class="mono">${esc(c.order_id)}</span></h3>
+        <p class="sub">Conversation <span class="mono" style="font-size:11px">${esc(c.conversation_id)}</span> &middot; ${esc(c._when)}</p></div>
+        <button class="btn ghost sm" onclick="OPEN_CALL=null;document.getElementById('log-detail').innerHTML='';refreshLog()">Close</button>
+      </div>
+      <div class="grid g2">
+        <div>
+          <p class="eyebrow">What the customer said</p>
+          <div class="kv">${kv("Reason", esc(c.reason))}${kv("Condition used", esc(c.condition))}${kv("Declines", c.refusals ?? 0)}</div>
+          <ul style="margin:8px 0 0 18px;padding:0;font-size:13px">${decl}</ul>
+          <p class="eyebrow" style="margin-top:16px">Classifier &middot; Nebius</p>
+          ${lab ? `<div class="kv">${kv("Return type", esc(lab.return_type))}${kv("Item status", esc(lab.item_status))}${kv("Condition", esc(lab.condition) )}${kv("Wants replacement", lab.wants_replacement)}${kv("Requests human", lab.requests_human)}${kv("Confidence", conf || Number(lab.confidence).toFixed(2))}${kv("Latency", (lab.latency_ms || 0) + " ms")}${kv("Model", `<span class="mono" style="font-size:11px">${esc(lab.model)}</span>`)}</div>`
+                : `<p class="sub">Not available on this call: keyword fallback decided the inputs.</p>`}
+        </div>
+        <div>
+          <p class="eyebrow">What the engine did</p>
+          <div class="kv">${kv("Decision", `<span class="mono">${esc(c.decision)}</span>`)}${kv("Reason code", `<span class="mono" style="font-size:11.5px">${esc(c.reason_code)}</span>`)}${kv("Offer", esc(c.offer_label) + " &middot; " + usd(c.customer_gets))}${kv("Alternative", esc(c.fallback))}${kv("Escalated", esc(c.escalated))}${kv("Net to merchant", usd(c.net_to_merchant))}${kv("Baseline net", usd(c.baseline_net))}${kv("Margin saved", `<b>${usd(c.margin_saved)}</b>`)}${kv("Flags", (c.flags || []).map(esc).join("; ") || "none")}</div>
+          <p class="sub" style="margin-top:8px;font-size:13px">${esc(c.rationale)}</p>
+          <p class="eyebrow" style="margin-top:16px">Every option, scored</p>
+          <div class="t-scroll"><table><thead><tr><th>Option</th><th class="num">Customer gets</th><th class="num">Net to merchant</th></tr></thead><tbody>${opts}</tbody></table></div>
+        </div>
+      </div>
+    </div>`;
 }
 
 /* ---------- redraw charts on page change / theme / resize ---------- */

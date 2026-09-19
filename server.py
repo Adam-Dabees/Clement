@@ -103,6 +103,7 @@ def _log(d, sess, inputs):
         "refusals": sess["refusals"],
         "classifier": inputs["labels"],
         "classifier_fallback": inputs["labels"] is None,
+        "declines": [dict(x) for x in sess["declines"]],
     })
     for i, r in enumerate(CALL_LOG):
         if r["conversation_id"] == sess["cid"]:
@@ -318,7 +319,7 @@ def get_log():
     retained = sum(1 for c in CALL_LOG if c["decision"] in ("exchange", "partial_refund_keep_item"))
     return {
         "calls": [
-            {k: v for k, v in c.items() if k != "all_options"}
+            {**{k: v for k, v in c.items() if k != "all_options"}, "options": c["all_options"]}
             for c in sorted(CALL_LOG, key=lambda c: c["_t"], reverse=True)
         ],
         "total_calls": len(CALL_LOG),
