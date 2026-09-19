@@ -1,0 +1,1948 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Clement — Returns Console</title>
+<style>
+  /* ------------------------------------------------------------------
+     Design tokens. Surfaces and ink match static/index.html so the
+     customer-facing demo and this business console read as one product.
+     Viz tokens are the dataviz reference palette, validated against
+     THESE surfaces (white card / #201e1b card) in both modes.
+     ------------------------------------------------------------------ */
+  :root {
+    color-scheme: light;
+    --bg: #fbfaf8;
+    --panel: #ffffff;
+    --sunk: #f6f4f0;
+    --line: #e7e3dc;
+    --line-soft: #efece6;
+    --ink: #1c1a17;
+    --ink-2: #52514e;
+    --muted: #8a857c;
+    --accent: #1f6f54;
+    --accent-soft: #eaf3ef;
+
+    /* status -- fixed, never themed */
+    --good: #0ca30c;
+    --warning: #fab219;
+    --serious: #ec835a;
+    --critical: #d03b3b;
+    --good-text: #006300;
+
+    /* viz: single series + sequential blue */
+    --series-1: #2a78d6;
+    --seq-100: #cde2fb;
+    --seq-250: #86b6ef;
+    --seq-450: #2a78d6;
+    --seq-600: #184f95;
+    /* viz: diverging blue <-> red, neutral gray midpoint */
+    --div-pos-2: #2a78d6;
+    --div-pos-1: #86b6ef;
+    --div-mid:   #f0efec;
+    --div-neg-1: #dd8c8c;
+    --div-neg-2: #b23636;
+    /* viz chrome */
+    --grid: #e1e0d9;
+    --axis: #c3c2b7;
+    --deemph: #d9d6cf;
+
+    --r: 10px;
+    --r-sm: 7px;
+    --shadow: 0 1px 2px rgba(28,26,23,.04), 0 6px 20px -12px rgba(28,26,23,.10);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) {
+      color-scheme: dark;
+      --bg: #171614; --panel: #201e1b; --sunk: #191816;
+      --line: #33302b; --line-soft: #2a2825;
+      --ink: #f0ece6; --ink-2: #c3c2b7; --muted: #948d82;
+      --accent: #5cc79c; --accent-soft: #1d2a25;
+      --good-text: #0ca30c;
+      --series-1: #3987e5;
+      --seq-100: #1c3550; --seq-250: #9ec5f4; --seq-450: #3987e5; --seq-600: #184f95;
+      --div-pos-2: #3987e5; --div-pos-1: #9ec5f4; --div-mid: #383835;
+      --div-neg-1: #e0a8a8; --div-neg-2: #d05a5a;
+      --grid: #2c2c2a; --axis: #383835; --deemph: #3a3834;
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 6px 20px -12px rgba(0,0,0,.5);
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #171614; --panel: #201e1b; --sunk: #191816;
+    --line: #33302b; --line-soft: #2a2825;
+    --ink: #f0ece6; --ink-2: #c3c2b7; --muted: #948d82;
+    --accent: #5cc79c; --accent-soft: #1d2a25;
+    --good-text: #0ca30c;
+    --series-1: #3987e5;
+    --seq-100: #1c3550; --seq-250: #9ec5f4; --seq-450: #3987e5; --seq-600: #184f95;
+    --div-pos-2: #3987e5; --div-pos-1: #9ec5f4; --div-mid: #383835;
+    --div-neg-1: #e0a8a8; --div-neg-2: #d05a5a;
+    --grid: #2c2c2a; --axis: #383835; --deemph: #3a3834;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 6px 20px -12px rgba(0,0,0,.5);
+  }
+
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 14.5px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  h1,h2,h3,h4 { margin: 0; font-weight: 600; letter-spacing: -0.011em; }
+  p { margin: 0; }
+  a { color: inherit; }
+  button { font: inherit; cursor: pointer; }
+
+  /* ---------- primitives ---------- */
+  .eyebrow { font-size: 11.5px; font-weight: 600; text-transform: uppercase;
+             letter-spacing: .08em; color: var(--muted); }
+  .sub { color: var(--muted); }
+  .card { background: var(--panel); border: 1px solid var(--line);
+          border-radius: var(--r); padding: 22px 24px; }
+  .card.pad-0 { padding: 0; }
+  .card-h { display: flex; align-items: flex-start; justify-content: space-between;
+            gap: 16px; margin-bottom: 18px; flex-wrap: wrap; }
+  .card-h h3 { font-size: 15px; }
+  .card-h .sub { font-size: 13px; margin-top: 3px; max-width: 62ch; }
+  .grid { display: grid; gap: 16px; }
+  .g2 { grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); }
+  .g3 { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+  .g4 { grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
+  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .spread { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+  .stack { display: grid; gap: 22px; }
+  .hr { height: 1px; background: var(--line); border: 0; margin: 20px 0; }
+
+  .btn { padding: 9px 15px; border-radius: var(--r-sm); border: 1px solid transparent;
+         background: var(--accent); color: #fff; font-weight: 550; }
+  .btn:hover { filter: brightness(1.06); }
+  .btn.ghost { background: transparent; color: var(--ink-2); border-color: var(--line); }
+  .btn.ghost:hover { background: var(--sunk); }
+  .btn.sm { padding: 6px 11px; font-size: 13px; }
+  .btn:disabled { opacity: .45; cursor: not-allowed; }
+  input, select, textarea {
+    font: inherit; padding: 8px 12px; border-radius: var(--r-sm);
+    border: 1px solid var(--line); background: var(--panel); color: var(--ink);
+  }
+  input:focus, select:focus, textarea:focus, .btn:focus-visible {
+    outline: 2px solid var(--series-1); outline-offset: 1px;
+  }
+
+  .pill { display: inline-flex; align-items: center; gap: 6px; font-size: 12px;
+          font-weight: 550; padding: 3px 9px; border-radius: 999px;
+          border: 1px solid var(--line); color: var(--ink-2); background: var(--sunk); }
+  .pill .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+  .pill.live { color: var(--good-text); border-color: color-mix(in srgb, var(--good) 35%, transparent);
+               background: color-mix(in srgb, var(--good) 9%, transparent); }
+  .pill.crit { color: var(--critical); border-color: color-mix(in srgb, var(--critical) 38%, transparent);
+               background: color-mix(in srgb, var(--critical) 9%, transparent); }
+  .pill.warn { color: var(--ink); border-color: color-mix(in srgb, var(--warning) 55%, transparent);
+               background: color-mix(in srgb, var(--warning) 16%, transparent); }
+  .pill.info { color: var(--ink-2); border-color: color-mix(in srgb, var(--series-1) 30%, transparent);
+               background: color-mix(in srgb, var(--series-1) 8%, transparent); }
+
+  table { width: 100%; border-collapse: collapse; }
+  th { text-align: left; font-size: 11.5px; font-weight: 600; color: var(--muted);
+       text-transform: uppercase; letter-spacing: .06em;
+       padding: 0 14px 10px 0; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  td { padding: 13px 14px 13px 0; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
+  tbody tr:last-child td { border-bottom: none; }
+  th:last-child, td:last-child { padding-right: 0; }
+  .num { font-variant-numeric: tabular-nums; text-align: right; }
+  th.num { text-align: right; }
+  .t-scroll { overflow-x: auto; }
+  tr.clickable { cursor: pointer; }
+  tr.clickable:hover td { background: var(--sunk); }
+
+  /* stat tile / hero */
+  .tile { background: var(--panel); border: 1px solid var(--line);
+          border-radius: var(--r); padding: 18px 20px; }
+  .tile .l { font-size: 12.5px; color: var(--muted); }
+  .tile .v { font-size: 26px; font-weight: 600; letter-spacing: -.02em; margin-top: 4px; }
+  .tile .d { font-size: 12.5px; color: var(--muted); margin-top: 3px; }
+  .up { color: var(--good-text); font-weight: 550; }
+  .down { color: var(--critical); font-weight: 550; }
+  .hero { font-size: 52px; line-height: 1.05; font-weight: 600; letter-spacing: -.03em; }
+
+  /* meter */
+  .meter { height: 6px; border-radius: 999px; background: var(--seq-100); overflow: hidden; min-width: 66px; }
+  .meter > i { display: block; height: 100%; border-radius: 999px; background: var(--series-1); }
+  .meter.s-good > i { background: var(--good); }
+  .meter.s-warn > i { background: var(--warning); }
+  .meter.s-serious > i { background: var(--serious); }
+  .meter.s-crit > i { background: var(--critical); }
+
+  /* quote / transcript */
+  .quote { border-left: 2px solid var(--line); padding: 2px 0 2px 14px; color: var(--ink-2); }
+  .tape { background: var(--sunk); border: 1px solid var(--line-soft); border-radius: var(--r-sm);
+          padding: 14px 16px; display: grid; gap: 10px; }
+  .turn { display: grid; grid-template-columns: 62px 1fr; gap: 12px; font-size: 13.5px; }
+  .turn .who { font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
+               color: var(--muted); padding-top: 3px; }
+  code, .mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12.5px; }
+  code { background: var(--sunk); padding: 1.5px 5px; border-radius: 4px; }
+
+  /* ---------- shell ---------- */
+  #shell { display: none; min-height: 100vh; grid-template-columns: 228px 1fr; }
+  #shell.on { display: grid; }
+  nav.side { border-right: 1px solid var(--line); background: var(--panel);
+             padding: 20px 14px; position: sticky; top: 0; height: 100vh;
+             display: flex; flex-direction: column; gap: 4px; }
+  .brand { display: flex; align-items: center; gap: 9px; padding: 0 8px 16px; }
+  .brand .mk { width: 22px; height: 22px; border-radius: 6px; background: var(--accent);
+               color: #fff; display: grid; place-items: center; font-size: 13px; font-weight: 700; }
+  .brand b { font-size: 15px; }
+  .ws { margin: 0 8px 16px; padding: 10px 11px; border: 1px solid var(--line);
+        border-radius: var(--r-sm); background: var(--sunk); }
+  .ws .n { font-size: 13px; font-weight: 600; }
+  .ws .m { font-size: 11.5px; color: var(--muted); }
+  .nav-l { font-size: 11px; text-transform: uppercase; letter-spacing: .08em;
+           color: var(--muted); padding: 14px 10px 6px; font-weight: 600; }
+  .nav-i { display: flex; align-items: center; gap: 9px; padding: 8px 10px;
+           border-radius: var(--r-sm); color: var(--ink-2); font-size: 14px;
+           border: 0; background: none; width: 100%; text-align: left; }
+  .nav-i:hover { background: var(--sunk); }
+  .nav-i.on { background: var(--accent-soft); color: var(--ink); font-weight: 600; }
+  .nav-i .star { color: var(--accent); font-size: 11px; }
+  .nav-i .ct { margin-left: auto; font-size: 11.5px; font-weight: 600;
+               background: var(--critical); color: #fff; border-radius: 999px; padding: 1px 6px; }
+  main { padding: 30px 34px 96px; max-width: 1180px; }
+  .page-h { margin-bottom: 26px; }
+  .page-h h2 { font-size: 23px; }
+  .page-h .q { color: var(--muted); margin-top: 5px; font-size: 14.5px; }
+  .filters { display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+             padding: 12px 0 20px; border-bottom: 1px solid var(--line); margin-bottom: 24px; }
+  .filters .lbl { font-size: 12.5px; color: var(--muted); }
+  .page { display: none; }
+  .page.on { display: block; }
+
+  /* ---------- onboarding ---------- */
+  #onb { max-width: 880px; margin: 0 auto; padding: 56px 20px 120px; }
+  .steps { display: flex; gap: 0; margin: 28px 0 30px; }
+  .step { flex: 1; padding-top: 11px; border-top: 2px solid var(--line); }
+  .step.on { border-top-color: var(--accent); }
+  .step.done { border-top-color: var(--accent); }
+  .step .k { font-size: 11.5px; color: var(--muted); font-weight: 600;
+             text-transform: uppercase; letter-spacing: .06em; }
+  .step .t { font-size: 13.5px; margin-top: 2px; color: var(--ink-2); }
+  .step.on .t { color: var(--ink); font-weight: 600; }
+  .drop { border: 1.5px dashed var(--line); border-radius: var(--r); padding: 38px 24px;
+          text-align: center; background: var(--sunk); transition: .15s; }
+  .drop.hot { border-color: var(--accent); background: var(--accent-soft); }
+  .drop .ic { font-size: 26px; }
+  .src { display: flex; gap: 12px; align-items: flex-start; padding: 15px 16px;
+         border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--panel);
+         cursor: pointer; text-align: left; width: 100%; }
+  .src:hover { border-color: var(--accent); }
+  .src.on { border-color: var(--accent); background: var(--accent-soft); }
+  .src .ic { font-size: 19px; line-height: 1.2; }
+  .src .n { font-weight: 600; font-size: 14px; }
+  .src .m { font-size: 12.5px; color: var(--muted); }
+  .chk { display: grid; gap: 9px; }
+  .chk li { display: flex; gap: 9px; align-items: flex-start; font-size: 13.5px;
+            color: var(--ink-2); list-style: none; }
+  .chk .tick { color: var(--good-text); font-weight: 700; }
+  ul.chk { padding: 0; margin: 0; }
+  .prog { height: 4px; background: var(--sunk); border-radius: 999px; overflow: hidden; }
+  .prog > i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .5s ease; }
+
+  /* ---------- viz ---------- */
+  figure { margin: 0; }
+  figcaption { font-size: 12.5px; color: var(--muted); margin-top: 10px; }
+  .legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12.5px;
+            color: var(--ink-2); margin-bottom: 14px; }
+  .legend i { width: 9px; height: 9px; border-radius: 2.5px; display: inline-block;
+              margin-right: 6px; vertical-align: -1px; }
+  svg { display: block; overflow: visible; }
+  svg text { fill: var(--muted); font-size: 11.5px; font-variant-numeric: tabular-nums; }
+  svg text.val { fill: var(--ink); font-weight: 600; }
+  svg text.cat { fill: var(--ink-2); font-size: 12.5px; font-variant-numeric: normal; }
+  .tip { position: fixed; z-index: 90; pointer-events: none; opacity: 0;
+         transition: opacity .1s; background: var(--panel); border: 1px solid var(--line);
+         border-radius: var(--r-sm); box-shadow: var(--shadow); padding: 9px 12px;
+         font-size: 12.5px; max-width: 250px; }
+  .tip b { display: block; margin-bottom: 2px; }
+  .hit:hover { opacity: .82; }
+  .toggle { display: inline-flex; border: 1px solid var(--line); border-radius: var(--r-sm); overflow: hidden; }
+  .toggle button { border: 0; background: var(--panel); color: var(--muted);
+                   padding: 5px 11px; font-size: 12.5px; font-weight: 550; }
+  .toggle button.on { background: var(--sunk); color: var(--ink); }
+
+  /* dial */
+  .dial { display: grid; gap: 12px; }
+  input[type=range] { -webkit-appearance: none; appearance: none; width: 100%;
+                      background: transparent; padding: 0; border: 0; height: 22px; }
+  input[type=range]::-webkit-slider-runnable-track {
+    height: 6px; border-radius: 999px;
+    background: linear-gradient(90deg, var(--seq-250), var(--seq-450)); }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 20px; height: 20px; border-radius: 50%;
+    background: var(--panel); border: 2px solid var(--series-1); margin-top: -7px;
+    box-shadow: var(--shadow); }
+  input[type=range]::-moz-range-track { height: 6px; border-radius: 999px; background: var(--seq-250); }
+  input[type=range]::-moz-range-thumb { width: 18px; height: 18px; border-radius: 50%;
+    background: var(--panel); border: 2px solid var(--series-1); }
+  .ends { display: flex; justify-content: space-between; font-size: 12.5px; color: var(--muted); }
+
+  .note { border-left: 2px solid var(--series-1); background: var(--sunk);
+          padding: 13px 16px; border-radius: 0 var(--r-sm) var(--r-sm) 0; font-size: 13.5px; color: var(--ink-2); }
+  .note.warn { border-left-color: var(--warning); }
+  .note.crit { border-left-color: var(--critical); }
+  .note.good { border-left-color: var(--good); }
+  .note b { color: var(--ink); }
+  .kv { display: grid; grid-template-columns: 1fr auto; gap: 7px 16px; font-size: 13.5px; }
+  .kv .k { color: var(--muted); }
+  .kv .v { font-variant-numeric: tabular-nums; }
+  .kv .tot { border-top: 1px solid var(--line); padding-top: 8px; font-weight: 650; color: var(--ink); }
+
+  .detail { background: var(--sunk); border: 1px solid var(--line); border-radius: var(--r);
+            padding: 20px 22px; margin-top: 2px; }
+  .sig { display: grid; grid-template-columns: 1fr 70px 46px; gap: 8px 12px;
+         align-items: center; font-size: 13px; }
+  .sig .b { height: 5px; border-radius: 999px; background: var(--seq-100); }
+  .sig .b > i { display: block; height: 100%; border-radius: 999px; background: var(--series-1); }
+
+  @media (max-width: 880px) {
+    #shell.on { grid-template-columns: 1fr; }
+    nav.side { position: static; height: auto; flex-direction: row; overflow-x: auto;
+               border-right: 0; border-bottom: 1px solid var(--line); }
+    .brand, .ws, .nav-l { display: none; }
+    .nav-i { white-space: nowrap; width: auto; }
+    main { padding: 22px 18px 80px; }
+  }
+  @media print { nav.side, .filters { display: none; } }
+</style>
+</head>
+<body>
+
+<div class="tip" id="tip"></div>
+
+<!-- =================================================================
+     ONBOARDING -- the landing experience. Three steps, then Go live.
+     ================================================================= -->
+<div id="onb">
+  <div class="row" style="justify-content:space-between">
+    <div class="brand" style="padding:0">
+      <span class="mk">C</span><b>Clement</b>
+    </div>
+    <div class="row">
+      <button class="btn ghost sm" onclick="toggleTheme()">Theme</button>
+      <button class="btn ghost sm" onclick="goLive(true)">Skip to console &rarr;</button>
+    </div>
+  </div>
+
+  <div style="margin-top:38px">
+    <p class="eyebrow">Set up your returns line</p>
+    <h1 style="font-size:31px;margin-top:8px;max-width:22ch">Teach it your policy. It answers the phone tonight.</h1>
+    <p class="sub" style="margin-top:12px;max-width:60ch;font-size:15px">
+      Clement takes the return call, decides the outcome on the economics of that
+      specific item, and never denies a refund. Three steps, about four minutes.
+    </p>
+  </div>
+
+  <div class="steps" id="steps"></div>
+
+  <!-- step 1 -->
+  <div class="card ob-step" data-step="1">
+    <div class="card-h">
+      <div>
+        <h3>1 &nbsp;Upload the policy you already have</h3>
+        <p class="sub">The document you give a new rep on day one. We read it and turn
+          it into machine-readable rules you can see and edit. No one writes a config file.</p>
+      </div>
+      <span class="pill">PDF, DOCX, MD &middot; up to 40 pages</span>
+    </div>
+
+    <div id="dz" class="drop">
+      <div class="ic">&#128196;</div>
+      <p style="margin-top:8px;font-weight:600">Drop your rep training doc here</p>
+      <p class="sub" style="font-size:13px;margin-top:3px">or</p>
+      <div class="row" style="justify-content:center;margin-top:10px">
+        <button class="btn" onclick="parseDoc('Harlow_CS_Returns_Training_v4.pdf', 18)">
+          Use the sample doc
+        </button>
+        <label class="btn ghost" style="margin:0">
+          Choose a file<input type="file" id="fi" hidden onchange="pickFile(this)">
+        </label>
+      </div>
+    </div>
+
+    <div id="parsing" style="display:none;margin-top:20px">
+      <div class="spread" style="margin-bottom:8px">
+        <span class="sub" id="p-msg" style="font-size:13.5px">Reading&hellip;</span>
+        <span class="sub num" id="p-pct" style="font-size:13.5px">0%</span>
+      </div>
+      <div class="prog"><i id="p-bar"></i></div>
+    </div>
+
+    <div id="parsed" style="display:none;margin-top:22px">
+      <div class="spread" style="margin-bottom:14px">
+        <div>
+          <h4 style="font-size:14px">Rules extracted from <span id="doc-name" class="mono"></span></h4>
+          <p class="sub" style="font-size:13px;margin-top:2px">
+            Every row is editable. Anything we were unsure of is flagged, not guessed silently.
+          </p>
+        </div>
+        <span class="pill info" id="rule-count"></span>
+      </div>
+      <div class="t-scroll"><table id="rules-t"></table></div>
+      <div class="note warn" style="margin-top:18px">
+        <b>Two rules need you.</b> We could not find a partial-refund ceiling or a
+        store-credit sweetener in your doc. We have proposed defaults; confirm or change them.
+        Nothing goes live on a guess.
+      </div>
+      <div class="row" style="margin-top:20px;justify-content:flex-end">
+        <button class="btn" onclick="setStep(2)">Looks right &rarr;</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- step 2 -->
+  <div class="card ob-step" data-step="2" style="display:none">
+    <div class="card-h">
+      <div>
+        <h3>2 &nbsp;Connect your order data</h3>
+        <p class="sub">The agent needs to know what was bought, when it landed, and what
+          it costs you to take it back. Read-only. We never write to your store.</p>
+      </div>
+    </div>
+    <div class="grid g2" id="srcs"></div>
+
+    <div id="mapping" style="display:none;margin-top:22px">
+      <hr class="hr">
+      <div class="spread" style="margin-bottom:14px">
+        <h4 style="font-size:14px">Field mapping <span class="sub" style="font-weight:400">— detected automatically</span></h4>
+        <span class="pill live"><i class="dot"></i>Connected</span>
+      </div>
+      <div class="t-scroll"><table id="map-t"></table></div>
+      <div class="note good" style="margin-top:18px">
+        <b>2,847 returns across 90 days synced.</b> That history is what calibrates your
+        thresholds on the next screen — the cost/satisfaction curve is fitted to your
+        returns, not to an industry average.
+      </div>
+      <div class="row" style="margin-top:20px;justify-content:flex-end">
+        <button class="btn" onclick="setStep(3)">Continue &rarr;</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- step 3 -->
+  <div class="card ob-step" data-step="3" style="display:none">
+    <div class="card-h">
+      <div>
+        <h3>3 &nbsp;Confirm the envelope, then go live</h3>
+        <p class="sub">This is the box the agent may act inside. It cannot act outside it,
+          and it cannot change it — only you can, on the Policy page.</p>
+      </div>
+    </div>
+
+    <div class="grid g2">
+      <div>
+        <p class="eyebrow" style="margin-bottom:12px">Your envelope</p>
+        <div class="kv" id="env-kv"></div>
+      </div>
+      <div>
+        <p class="eyebrow" style="margin-bottom:12px">Guardrails we enforce for you</p>
+        <ul class="chk">
+          <li><span class="tick">&#10003;</span><span><b>A refund is never denied.</b> The agent offers alternatives; the customer chooses.</span></li>
+          <li><span class="tick">&#10003;</span><span><b>Two declines and it stops.</b> On the second refusal it hands over the full refund and stops negotiating.</span></li>
+          <li><span class="tick">&#10003;</span><span><b>Fault before margin.</b> If the item is faulty, no partial is ever offered. Full value back.</span></li>
+          <li><span class="tick">&#10003;</span><span><b>Ambiguity favours the customer.</b> Below 60% confidence we treat it as a defect, then queue it for your review.</span></li>
+          <li><span class="tick">&#10003;</span><span><b>The model never sees your cost basis.</b> Margin figures stay server-side, out of the transcript.</span></li>
+        </ul>
+      </div>
+    </div>
+
+    <hr class="hr">
+    <div class="spread">
+      <div>
+        <p class="eyebrow">Projected, on your last 2,847 returns</p>
+        <p style="margin-top:6px;font-size:14px;max-width:52ch" class="sub">
+          At the recommended setting. You can move it any time, and see the curve it sits on.
+        </p>
+      </div>
+      <div class="row" style="gap:28px">
+        <div><div class="sub" style="font-size:12.5px">Margin saved / quarter</div>
+             <div style="font-size:22px;font-weight:600">$61,400</div></div>
+        <div><div class="sub" style="font-size:12.5px">Return CSAT</div>
+             <div style="font-size:22px;font-weight:600">4.11 &rarr; 4.46</div></div>
+      </div>
+    </div>
+    <div class="row" style="margin-top:24px;justify-content:flex-end">
+      <button class="btn ghost" onclick="setStep(2)">Back</button>
+      <button class="btn" onclick="goLive()">Go live &rarr;</button>
+    </div>
+  </div>
+</div>
+
+<!-- =================================================================
+     CONSOLE
+     ================================================================= -->
+<div id="shell">
+  <nav class="side">
+    <div class="brand"><span class="mk">C</span><b>Clement</b></div>
+    <div class="ws">
+      <div class="n">Harlow &amp; Co</div>
+      <div class="m">Homeware &middot; 8,412 accounts</div>
+    </div>
+    <div id="nav"></div>
+    <div style="margin-top:auto;padding:12px 8px 0;border-top:1px solid var(--line)">
+      <div class="row" style="justify-content:space-between">
+        <span class="pill live"><i class="dot"></i>Agent live</span>
+        <button class="btn ghost sm" onclick="toggleTheme()" title="Light / dark">&#9681;</button>
+      </div>
+      <button class="btn ghost sm" style="width:100%;margin-top:10px" onclick="restart()">Restart demo</button>
+    </div>
+  </nav>
+
+  <main>
+    <!-- ============ LIVE ============ -->
+    <section class="page" data-page="live">
+      <div class="page-h">
+        <h2>Live</h2>
+        <p class="q">What is happening on calls right now?</p>
+      </div>
+
+      <div class="grid g2" style="align-items:stretch">
+        <div class="card">
+          <p class="eyebrow">Margin saved this quarter</p>
+          <div class="hero" id="hero" style="margin:10px 0 6px">$61,400</div>
+          <p class="sub" style="font-size:13.5px">
+            Against the baseline every merchant runs today: full refund, item ships back.
+            <span class="up">+27%</span> on return cost, 2,847 returns.
+          </p>
+          <div style="margin-top:20px" id="spark"></div>
+        </div>
+        <div class="grid g2" style="gap:14px">
+          <div class="tile"><div class="l">Returns handled</div><div class="v" id="k-calls">2,847</div><div class="d">94% without a human</div></div>
+          <div class="tile"><div class="l">Return CSAT</div><div class="v">4.46</div><div class="d"><span class="up">+0.35</span> vs human flow</div></div>
+          <div class="tile"><div class="l">Avg handle time</div><div class="v">2m 51s</div><div class="d"><span class="up">&minus;68%</span> vs 8m 52s</div></div>
+          <div class="tile"><div class="l">Escalated</div><div class="v" id="k-esc">176</div><div class="d">6.2% &middot; cap and requests</div></div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:22px">
+        <div class="card-h">
+          <div>
+            <h3>Call in progress</h3>
+            <p class="sub">What the customer hears, beside what the business books. The
+              model runs the conversation; the engine picks the outcome.</p>
+          </div>
+          <span class="pill live"><i class="dot"></i>02:41</span>
+        </div>
+        <div class="grid g2">
+          <div>
+            <p class="eyebrow" style="margin-bottom:10px">Transcript</p>
+            <div class="tape" id="tape"></div>
+          </div>
+          <div>
+            <p class="eyebrow" style="margin-bottom:10px">Engine, server-side</p>
+            <div class="card" style="background:var(--sunk);padding:18px 20px">
+              <div class="kv">
+                <span class="k">Order</span><span class="v mono">A1077</span>
+                <span class="k">Classified condition</span><span class="v">used &middot; 0.91</span>
+                <span class="k">Fault attributed</span><span class="v">no &middot; 0.88</span>
+                <span class="k">Resale value, this item</span><span class="v">$0.00</span>
+                <span class="k">Cost to take it back</span><span class="v">$48.00</span>
+                <span class="k">Reason code</span><span class="v mono" style="font-size:11.5px">preference_return_offer_choice</span>
+              </div>
+              <hr class="hr" style="margin:16px 0">
+              <p class="eyebrow">Chosen</p>
+              <p style="font-weight:600;margin-top:5px">40% back, keep the item &nbsp;<span class="sub" style="font-weight:400">— $87.20</span></p>
+              <p class="sub" style="font-size:13px;margin-top:6px">Fallback on ask: full refund, return the item.</p>
+              <div class="note good" style="margin-top:14px;font-size:13px">
+                <b>+$184.77</b> vs the baseline. Opened bedding has no resale value, so
+                paying $48 of freight recovers nothing.
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:22px">
+        <div class="card-h">
+          <div><h3>Decision log</h3>
+          <p class="sub" id="log-src">Live from the engine.</p></div>
+          <span class="pill" id="log-pill">&mdash;</span>
+        </div>
+        <div class="t-scroll"><table id="log-t"></table></div>
+      </div>
+    </section>
+
+    <!-- ============ SMART DECISIONS ============ -->
+    <section class="page" data-page="decisions">
+      <div class="page-h">
+        <h2>Smart decisions</h2>
+        <p class="q">Where is the cost &times; satisfaction optimum — fitted to our own refund history?</p>
+      </div>
+
+      <div class="filters">
+        <span class="lbl">Fitted on</span>
+        <select><option>Last 90 days — 2,847 returns</option><option>Last 180 days — 5,410 returns</option><option>Trailing 12 months — 11,286 returns</option></select>
+        <span class="lbl">Category</span>
+        <select><option>All categories</option><option>Bedding</option><option>Kitchen</option><option>Luggage</option><option>Apparel</option></select>
+      </div>
+
+      <div class="card">
+        <div class="card-h">
+          <div>
+            <h3>The dial</h3>
+            <p class="sub">One control, two objectives. Every position is scored by replaying
+              your 2,847 historical returns through the engine — so these are your numbers,
+              not an industry benchmark.</p>
+          </div>
+          <button class="btn ghost sm" onclick="setDial(REC)">Reset to recommended</button>
+        </div>
+
+        <div class="dial">
+          <input type="range" id="dial" min="0" max="10" value="6" step="1" oninput="setDial(+this.value)">
+          <div class="ends"><span>&larr; Customer-first</span><span>Margin-first &rarr;</span></div>
+        </div>
+
+        <div class="grid g4" style="margin-top:24px">
+          <div class="tile"><div class="l">Margin saved / 1,000 returns</div><div class="v" id="d-margin">$21,600</div><div class="d" id="d-margin-d"></div></div>
+          <div class="tile"><div class="l">Return CSAT</div><div class="v" id="d-csat">4.46</div><div class="d" id="d-csat-d"></div></div>
+          <div class="tile"><div class="l">Pushed back twice</div><div class="v" id="d-dec">8.7%</div><div class="d">Refund handed over in full</div></div>
+          <div class="tile"><div class="l">Escalated to a human</div><div class="v" id="d-escal">6.2%</div><div class="d">Cap, or they asked</div></div>
+        </div>
+
+        <div class="note" id="d-note" style="margin-top:20px"></div>
+      </div>
+
+      <!-- small multiples: never a dual axis -->
+      <div class="grid g2" style="margin-top:22px">
+        <div class="card">
+          <div class="card-h">
+            <div><h3>Margin saved</h3>
+            <p class="sub">Per 1,000 returns, by dial position.</p></div>
+            <div class="toggle" data-for="mChart">
+              <button class="on" onclick="viewSwap(this,'mChart','chart')">Chart</button>
+              <button onclick="viewSwap(this,'mChart','table')">Table</button>
+            </div>
+          </div>
+          <div id="mChart-chart"></div>
+          <div id="mChart-table" style="display:none" class="t-scroll"></div>
+          <figcaption>Margin <b>peaks at position 6</b> and falls after it. Pushing harder
+            makes customers refuse twice, and a second refusal hands over the full refund —
+            so the aggressive settings cost you money <em>and</em> satisfaction.</figcaption>
+        </div>
+
+        <div class="card">
+          <div class="card-h">
+            <div><h3>Return CSAT</h3>
+            <p class="sub">Post-call survey mean, by dial position.</p></div>
+            <div class="toggle" data-for="cChart">
+              <button class="on" onclick="viewSwap(this,'cChart','chart')">Chart</button>
+              <button onclick="viewSwap(this,'cChart','table')">Table</button>
+            </div>
+          </div>
+          <div id="cChart-chart"></div>
+          <div id="cChart-table" style="display:none" class="t-scroll"></div>
+          <figcaption>Monotone: harder negotiation always costs satisfaction. The optimum is
+            where the margin curve turns, not where CSAT is highest.</figcaption>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:22px">
+        <div class="card-h">
+          <div>
+            <h3>Satisfaction by outcome</h3>
+            <p class="sub">The finding that makes this a product rather than a cost-cutting
+              tool: the cheapest outcome for you is also the one customers like most.</p>
+          </div>
+        </div>
+        <div class="legend" id="csat-legend"></div>
+        <div id="csatChart"></div>
+        <div class="note good" style="margin-top:18px">
+          <b>Returnless refund scores 4.82 — the highest of any outcome, above full refund at 4.15.</b>
+          On a zero-resale item it is also your cheapest outcome. Cost and satisfaction are
+          not in tension there; they point the same way. Store credit is the opposite: it
+          saves the cash but scores 3.92, so we cap how often it is offered.
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:22px">
+        <div class="card-h">
+          <div>
+            <h3>Learned thresholds</h3>
+            <p class="sub">Recomputed nightly per category from your own outcomes. Where we
+              changed your policy default, the delta and the evidence are both shown.</p>
+          </div>
+          <span class="pill info">4 of 6 categories adjusted</span>
+        </div>
+        <div class="t-scroll"><table id="thr-t"></table></div>
+        <div class="note" style="margin-top:18px">
+          <b>Worked example — bedding.</b> Your doc set the returnless ceiling at $120. At
+          that ceiling you paid inbound freight on 61% of bedding returns and recovered $0
+          on every one of them, because opened bedding cannot legally be resold. We raised
+          the ceiling to $250. Effect over 412 bedding returns: <b>+$19,400</b>, and CSAT on
+          those calls went 4.21 &rarr; 4.74.
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:22px">
+        <div class="card-h">
+          <div>
+            <h3>True cost of a refund</h3>
+            <p class="sub">We hold the whole transcript, so handle time, turn count and the
+              reason code are measured rather than estimated. That closes the last gap in
+              cost-to-serve.</p>
+          </div>
+          <select id="cost-pick" onchange="renderCost()"></select>
+        </div>
+        <div class="grid g2">
+          <div>
+            <p class="eyebrow" style="margin-bottom:12px">With Clement</p>
+            <div class="kv" id="cost-new"></div>
+          </div>
+          <div>
+            <p class="eyebrow" style="margin-bottom:12px">Your previous flow</p>
+            <div class="kv" id="cost-old"></div>
+          </div>
+        </div>
+        <div id="cost-bar" style="margin-top:22px"></div>
+        <div class="note good" style="margin-top:18px" id="cost-note"></div>
+      </div>
+    </section>
+
+    <!-- ============ RISK & FRAUD ============ -->
+    <section class="page" data-page="risk">
+      <div class="page-h">
+        <h2>Risk &amp; fraud</h2>
+        <p class="q">Who is submitting false claims, and what do we do about it?</p>
+      </div>
+
+      <div class="note crit">
+        <b>Risk changes the route, never the entitlement.</b> A flagged account still gets
+        its refund — we route the call to a human and stop offering returnless, rather than
+        denying anything. This is deliberate: it is the difference between fraud control and
+        a dark pattern, and it is the question a customer's lawyer would ask.
+      </div>
+
+      <div class="filters" style="margin-top:22px">
+        <span class="lbl">Risk</span>
+        <select id="r-filter" onchange="renderRisk()">
+          <option value="all">All accounts</option>
+          <option value="flag" selected>Flagged only (34)</option>
+          <option value="clean">Cleared</option>
+        </select>
+        <span class="lbl">Window</span>
+        <select><option>Trailing 12 months</option><option>Last 90 days</option></select>
+        <span class="lbl" style="margin-left:auto">Scored nightly &middot; last run 03:12</span>
+      </div>
+
+      <div class="grid g4">
+        <div class="tile"><div class="l">Accounts flagged</div><div class="v">34</div><div class="d">0.4% of 8,412</div></div>
+        <div class="tile"><div class="l">Recovered / quarter</div><div class="v">$28,600</div><div class="d">By routing, not denying</div></div>
+        <div class="tile"><div class="l">Unconfirmed defect claims</div><div class="v">17.2%</div><div class="d">121 of 704 inspected, no fault found</div></div>
+        <div class="tile"><div class="l">Return cost concentration</div><div class="v">23%</div><div class="d">From the top 0.9% of accounts</div></div>
+      </div>
+
+      <div class="card" style="margin-top:22px">
+        <div class="card-h">
+          <div>
+            <h3>Where the cost concentrates</h3>
+            <p class="sub">Accounts by lifetime return rate. The tail is small enough to
+              handle by hand — which is the entire point of scoring it.</p>
+          </div>
+          <div class="toggle" data-for="cohort">
+            <button class="on" onclick="viewSwap(this,'cohort','chart')">Chart</button>
+            <button onclick="viewSwap(this,'cohort','table')">Table</button>
+          </div>
+        </div>
+        <div class="legend">
+          <span><i style="background:var(--deemph)"></i>Normal range</span>
+          <span><i style="background:var(--series-1)"></i>Flagged tail — 75 accounts, 23% of return cost</span>
+        </div>
+        <div id="cohort-chart"></div>
+        <div id="cohort-table" style="display:none" class="t-scroll"></div>
+      </div>
+
+      <div class="grid g2" style="margin-top:22px;grid-template-columns:1.55fr 1fr">
+        <div class="card">
+          <div class="card-h">
+            <div><h3>Flagged accounts</h3>
+            <p class="sub">Click a row for the claim history and the evidence behind the score.</p></div>
+          </div>
+          <div class="t-scroll"><table id="risk-t"></table></div>
+          <div id="risk-detail"></div>
+        </div>
+
+        <div class="card">
+          <div class="card-h"><div>
+            <h3>How the score is built</h3>
+            <p class="sub">Offline, nightly, on 12 months of history. Published weights —
+              your ops team can audit any score.</p>
+          </div></div>
+          <div class="sig" id="sig-list"></div>
+          <hr class="hr">
+          <p class="eyebrow" style="margin-bottom:10px">Two signals only we have</p>
+          <p class="sub" style="font-size:13.5px">
+            <b style="color:var(--ink)">Claim vs inspection.</b> We hold both the spoken claim
+            and the warehouse inspection result, so we can measure how often "it arrived
+            broken" turns out to be true — per account, not in aggregate.
+          </p>
+          <p class="sub" style="font-size:13.5px;margin-top:12px">
+            <b style="color:var(--ink)">Cross-call consistency.</b> The same account
+            describing three different faults in the same scripted phrasing is a signal a
+            web form cannot see. It only exists because the return happened as a conversation.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ REVIEW QUEUE ============ -->
+    <section class="page" data-page="review">
+      <div class="page-h">
+        <h2>Review queue</h2>
+        <p class="q">What needs a human?</p>
+      </div>
+
+      <div class="note">
+        <b>Everything here is already settled in the customer's favour.</b> Below 60%
+        confidence the engine treats the return as a defect and pays out immediately — your
+        review trains the classifier, it never claws anything back. Nobody is waiting on you.
+      </div>
+
+      <div class="grid g4" style="margin-top:22px">
+        <div class="tile"><div class="l">In queue</div><div class="v" id="q-n">3</div><div class="d">1.4% of today's calls</div></div>
+        <div class="tile"><div class="l">Median review time</div><div class="v">41s</div><div class="d">Down from 6m 20s</div></div>
+        <div class="tile"><div class="l">Agreement rate</div><div class="v">91%</div><div class="d">Humans confirm the engine</div></div>
+        <div class="tile"><div class="l">Handled without a human</div><div class="v">94%</div><div class="d">Target 97% at 4.4 CSAT</div></div>
+      </div>
+
+      <div class="card" style="margin-top:22px">
+        <div class="card-h"><div>
+          <h3>Awaiting review</h3>
+          <p class="sub">Low classifier confidence, or a risk flag that wants a person on the call.</p>
+        </div></div>
+        <div id="queue"></div>
+      </div>
+    </section>
+
+    <!-- ============ INTELLIGENCE ============ -->
+    <section class="page" data-page="intel">
+      <div class="page-h">
+        <h2>Intelligence</h2>
+        <p class="q">Why are returns happening?</p>
+      </div>
+
+      <div class="filters">
+        <span class="lbl">Window</span>
+        <select><option>Last 90 days</option><option>Last 30 days</option><option>Trailing 12 months</option></select>
+        <span class="lbl">Category</span>
+        <select><option>All categories</option><option>Bedding</option><option>Kitchen</option><option>Luggage</option><option>Apparel</option></select>
+      </div>
+
+      <div class="grid g2">
+        <div class="card">
+          <div class="card-h">
+            <div><h3>Why customers return</h3>
+            <p class="sub">Coded from the transcript, not from a dropdown the customer picked.</p></div>
+            <div class="toggle" data-for="reasons">
+              <button class="on" onclick="viewSwap(this,'reasons','chart')">Chart</button>
+              <button onclick="viewSwap(this,'reasons','table')">Table</button>
+            </div>
+          </div>
+          <div id="reasons-chart"></div>
+          <div id="reasons-table" style="display:none" class="t-scroll"></div>
+          <figcaption>A web form gives you seven buckets. A conversation gives you the phrase,
+            which is what tells you the duvet problem is a photograph and not a defect.</figcaption>
+        </div>
+
+        <div class="card">
+          <div class="card-h"><div>
+            <h3>Fix upstream</h3>
+            <p class="sub">Ranked by what it costs you per quarter, with the phrase customers
+              actually used.</p>
+          </div></div>
+          <div class="stack" style="gap:16px" id="fix-list"></div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:22px">
+        <div class="card-h">
+          <div><h3>Product defect signal</h3>
+          <p class="sub">Defect-attributed return rate against the category baseline. Two SKUs
+            are genuinely faulty; one just has a bad photo.</p></div>
+          <div class="toggle" data-for="defect">
+            <button class="on" onclick="viewSwap(this,'defect','chart')">Chart</button>
+            <button onclick="viewSwap(this,'defect','table')">Table</button>
+          </div>
+        </div>
+        <div id="defect-chart"></div>
+        <div id="defect-table" style="display:none" class="t-scroll"></div>
+      </div>
+
+      <div class="card" style="margin-top:22px">
+        <div class="card-h"><div>
+          <h3>Churn, and what to do about it</h3>
+          <p class="sub">A return is the most reliable churn signal you get, because the
+            customer is on the phone telling you why. Each item below is measured, with the
+            expected effect of acting on it.</p>
+        </div></div>
+        <div class="t-scroll"><table id="churn-t"></table></div>
+      </div>
+    </section>
+
+    <!-- ============ POLICY ============ -->
+    <section class="page" data-page="policy">
+      <div class="page-h">
+        <h2>Policy</h2>
+        <p class="q">What is it allowed to do, and where is the line?</p>
+      </div>
+
+      <div class="grid g2" style="grid-template-columns:1fr 1.15fr">
+        <div class="card">
+          <div class="card-h"><div>
+            <h3>Source document</h3>
+            <p class="sub">Your rules stay the source of truth. Re-upload and we re-derive,
+              showing you the diff before anything changes.</p>
+          </div></div>
+          <div class="row" style="gap:12px;align-items:flex-start">
+            <span style="font-size:24px">&#128196;</span>
+            <div>
+              <div style="font-weight:600" class="mono" id="pol-doc">Harlow_CS_Returns_Training_v4.pdf</div>
+              <div class="sub" style="font-size:12.5px">18 pages &middot; ingested today &middot; v4, by M. Ruiz</div>
+            </div>
+          </div>
+          <div class="row" style="margin-top:18px">
+            <button class="btn ghost sm">Re-upload</button>
+            <button class="btn ghost sm">Version history (4)</button>
+          </div>
+          <hr class="hr">
+          <p class="eyebrow" style="margin-bottom:10px">Hard invariants — not configurable</p>
+          <ul class="chk">
+            <li><span class="tick">&#10003;</span><span>A refund is never denied.</span></li>
+            <li><span class="tick">&#10003;</span><span>Two declines ends the negotiation.</span></li>
+            <li><span class="tick">&#10003;</span><span>Fault is decided before margin.</span></li>
+            <li><span class="tick">&#10003;</span><span>Ambiguity resolves for the customer.</span></li>
+            <li><span class="tick">&#10003;</span><span>The model never receives cost basis.</span></li>
+          </ul>
+          <p class="sub" style="font-size:12.5px;margin-top:14px">
+            These are enforced in the engine, not in the prompt, so no phrasing of a customer
+            request can move them.
+          </p>
+        </div>
+
+        <div class="card">
+          <div class="card-h">
+            <div><h3>Derived rules</h3>
+            <p class="sub">What we read out of your doc, and what the agent is running on now.</p></div>
+            <span class="pill live"><i class="dot"></i>In force</span>
+          </div>
+          <div class="t-scroll"><table id="pol-t"></table></div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:22px">
+        <div class="card-h"><div>
+          <h3>Decision order</h3>
+          <p class="sub">The engine runs these in sequence. It is deterministic: the same
+            inputs produce the same decision every time, which is why a language model is
+            nowhere in this path.</p>
+        </div></div>
+        <div class="t-scroll"><table id="order-t"></table></div>
+        <div class="note" style="margin-top:18px">
+          <b>Why this matters to your risk team.</b> Two identical returns cannot produce
+          different outcomes. Every decision carries a reason code, the ranked alternatives,
+          and the figures behind it — so any refund can be reconstructed months later from
+          the log alone.
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script>
+/* ==================================================================
+   DATA
+   All figures below are demo data for Harlow & Co, held consistent
+   with data.py (same five orders, same customers, same POLICY).
+   Swap for real aggregates when the warehouse is wired up.
+   ================================================================== */
+
+const money = n => (n < 0 ? "-$" : "$") + Math.abs(n).toLocaleString("en-US", {maximumFractionDigits: 0});
+const money2 = n => (n < 0 ? "-$" : "$") + Math.abs(n).toFixed(2);
+const pct = n => n.toFixed(1) + "%";
+
+/* --- onboarding: the rules we "read" out of the policy doc ---------
+   NOTE: this parse is canned for the demo. The real implementation is
+   one Nebius call -- doc text in, this JSON shape out -- which is the
+   second honest use of the model alongside the intake classifier.
+   Wire it at parseDoc(). Nothing downstream changes.                */
+const RULES = [
+  {quote: "Returns are accepted within 45 days of the delivery date.",
+   field: "return_window_days", value: "45 days", conf: 98, pg: 3},
+  {quote: "Any refund above $400 must be approved by a supervisor.",
+   field: "max_autonomous_refund_usd", value: "$400.00", conf: 96, pg: 4},
+  {quote: "Do not press a customer who has said no twice. Process the refund.",
+   field: "max_declines", value: "2", conf: 91, pg: 7},
+  {quote: "Opened bedding and worn apparel cannot be resold and must not be requested back.",
+   field: "zero_resale_categories", value: "bedding, apparel", conf: 94, pg: 9},
+  {quote: "If the fault is ours, the customer gets full value. Do not offer part of it.",
+   field: "defect_blocks_partial", value: "true", conf: 95, pg: 5},
+  {quote: "Escalate anyone who asks for a manager, or mentions legal action.",
+   field: "escalate_keywords", value: "7 phrases", conf: 93, pg: 11},
+  {quote: "Flag accounts with three or more prior returns for the ops review.",
+   field: "prior_returns_flag", value: "3", conf: 89, pg: 12},
+  {quote: "— not found in document —",
+   field: "max_partial_keep_ratio", value: "60% (proposed)", conf: 41, pg: null},
+  {quote: "— not found in document —",
+   field: "store_credit_bonus", value: "15% (proposed)", conf: 38, pg: null},
+];
+
+const SOURCES = [
+  {id: "shopify", ic: "&#128717;", n: "Shopify", m: "OAuth app · orders, fulfilments, refunds", rec: true},
+  {id: "api", ic: "&#128279;", n: "REST API", m: "Your endpoint · we map the fields"},
+  {id: "pg", ic: "&#128451;", n: "Postgres / warehouse", m: "Read replica · Snowflake, BigQuery, RDS"},
+  {id: "csv", ic: "&#128202;", n: "CSV upload", m: "One-off, for a pilot"},
+];
+
+const FIELD_MAP = [
+  ["orders.id", "order_id", "ok"],
+  ["orders.customer.email", "customer_ref", "ok"],
+  ["line_items.price", "price_paid", "ok"],
+  ["line_items.sku → cost_catalog.cogs", "unit_cogs", "ok"],
+  ["fulfilments.delivered_at", "days_since_delivery", "ok"],
+  ["shipping_zones.inbound_rate", "return_shipping", "ok"],
+  ["— not present —", "restock_labor", "default"],
+  ["— not present —", "resale_value", "derived"],
+];
+
+const ENVELOPE = [
+  ["Return window", "45 days"],
+  ["Autonomous refund cap", "$400.00"],
+  ["Declines before hand-over", "2"],
+  ["Max partial, keep the item", "60%"],
+  ["Store credit sweetener", "15%"],
+  ["Zero-resale categories", "Bedding, apparel"],
+  ["Prior-returns review flag", "3"],
+];
+
+/* --- the dial: every position replayed through 2,847 returns ------- */
+const REC = 6;
+const CURVE = {
+  margin: [5.2, 8.9, 12.6, 16.1, 19.3, 21.0, 21.6, 20.4, 17.2, 12.1, 6.4],  // $k / 1,000 returns
+  csat:   [4.82, 4.79, 4.75, 4.70, 4.64, 4.55, 4.46, 4.31, 4.10, 3.83, 3.51],
+  dec:    [1.1, 1.7, 2.5, 3.6, 5.1, 6.8, 8.7, 13.1, 19.4, 27.6, 36.9],       // % pushed back twice
+  escal:  [9.4, 8.8, 8.1, 7.5, 6.9, 6.5, 6.2, 5.8, 5.3, 4.9, 4.4],
+};
+const HUMAN_CSAT = 4.11;
+
+const CSAT_OUTCOME = [
+  {o: "Returnless refund",        n: 612, d: [85, 13, 1, 1, 0], mean: 4.82},
+  {o: "Exchange / replacement",   n: 486, d: [70, 22, 5, 2, 1], mean: 4.58},
+  {o: "Partial refund, keep it",  n: 524, d: [55, 27, 10, 5, 3], mean: 4.26},
+  {o: "Full refund with return",  n: 901, d: [48, 31, 12, 6, 3], mean: 4.15},
+  {o: "Store credit + bonus",     n: 148, d: [41, 29, 16, 9, 5], mean: 3.92},
+  {o: "Escalated to a human",     n: 176, d: [22, 26, 19, 19, 14], mean: 3.23},
+];
+const CSAT_KEYS = [
+  {l: "Very satisfied", c: "var(--div-pos-2)"},
+  {l: "Satisfied",      c: "var(--div-pos-1)"},
+  {l: "Neutral",        c: "var(--div-mid)"},
+  {l: "Dissatisfied",   c: "var(--div-neg-1)"},
+  {l: "Very dissatisfied", c: "var(--div-neg-2)"},
+];
+
+const THRESHOLDS = [
+  {cat: "Bedding",  n: 412, ret: "$250", was: "$120", cap: "$250", csat: 4.74, per: 47.10,
+   basis: "Zero resale by law. At $120 you paid freight on 61% of returns and recovered $0."},
+  {cat: "Apparel",  n: 688, ret: "$90",  was: "$60",  cap: "$180", csat: 4.61, per: 22.40,
+   basis: "Worn items unsellable. Freight averages $11 against $0 recovery."},
+  {cat: "Kitchen",  n: 734, ret: "$45",  was: "$45",  cap: "$400", csat: 4.38, per: 18.90,
+   basis: "Resale holds up. Unchanged — shipping back is usually correct here."},
+  {cat: "Luggage",  n: 305, ret: "$35",  was: "$60",  cap: "$400", csat: 4.29, per: 9.80,
+   basis: "High recovery, 71% resells at 62% of retail. Lowered: ask for it back more often."},
+  {cat: "Lighting", n: 421, ret: "$70",  was: "$70",  cap: "$300", csat: 4.44, per: 16.20,
+   basis: "Unchanged. Breakage in transit makes recovery unpredictable."},
+  {cat: "Decor",    n: 287, ret: "$55",  was: "$40",  cap: "$250", csat: 4.52, per: 14.60,
+   basis: "Raised. Fragile low-value items rarely survive the return leg intact."},
+];
+
+const COSTS = {
+  A1077: {
+    item: "Calder Linen Duvet, King — partial refund, kept",
+    now: [["Refund paid", 87.20], ["Inbound freight", 0], ["Restock labour", 0],
+          ["Resale recovered", 0], ["Handling — 3m 12s, voice", 0.41]],
+    old: [["Refund paid", 218.00], ["Inbound freight", 34.00], ["Restock labour", 14.00],
+          ["Resale recovered", 0], ["Handling — 11m 04s, human", 6.42]],
+    note: "Opened bedding cannot be resold, so the $48 of logistics in the old flow bought nothing. The transcript is what told us the complaint was a colour preference, not a fault — which is why a partial was allowed here at all."
+  },
+  A1188: {
+    item: "Trail Runner Socks, 3-pack — returnless refund",
+    now: [["Refund paid", 34.00], ["Inbound freight", 0], ["Restock labour", 0],
+          ["Resale recovered", 0], ["Handling — 1m 48s, voice", 0.23]],
+    old: [["Refund paid", 34.00], ["Inbound freight", 8.50], ["Restock labour", 3.00],
+          ["Resale recovered", 0], ["Handling — 7m 30s, human", 4.35]],
+    note: "Freight plus labour exceeded the item's value. The old flow paid $11.50 to receive worn socks it then threw away."
+  },
+  A1103: {
+    item: "Nomad Carry-On 40L — full refund, returned",
+    now: [["Refund paid", 349.00], ["Inbound freight", 28.00], ["Restock labour", 9.00],
+          ["Resale recovered", -205.00], ["Handling — 2m 30s, voice", 0.32]],
+    old: [["Refund paid", 349.00], ["Inbound freight", 28.00], ["Restock labour", 9.00],
+          ["Resale recovered", -205.00], ["Handling — 9m 12s, human", 5.34]],
+    note: "Here the engine agrees with the old flow: recovery is high, so ask for it back. The only saving is handle time. Showing this case matters — a tool that always disagrees with you is not calibrated, it is biased."
+  },
+};
+
+/* --- risk ---------------------------------------------------------- */
+const SIGNALS = [
+  ["Defect claims not confirmed by inspection", 32],
+  ["Return rate against category cohort", 24],
+  ["Repeat returnless requests", 16],
+  ["Cross-call transcript inconsistency", 12],
+  ["Shipping / payment reuse across accounts", 10],
+  ["Account age against order value", 6],
+];
+
+const ACCOUNTS = [
+  {n: "Sofia Alvarez", ref: "sofia.a@…", ltv: 410, orders: 14, rets: 11, claims: "9 defect, 1 confirmed",
+   score: 94, top: "8 of 9 defect claims found no fault", posture: "Human review · no returnless", flag: true,
+   hist: [["2026-09-02", "A1188 Trail socks", "\"they're too tight and the seam split\"", "No fault found"],
+          ["2026-08-19", "A1— Ridge towel set", "\"arrived with a hole\"", "No fault found"],
+          ["2026-07-28", "A1— Copper pan", "\"handle came loose straight away\"", "No fault found"],
+          ["2026-06-11", "A1— Glass carafe", "\"cracked in the box\"", "Confirmed — refunded in full"]],
+   why: "Four of the last five claims used near-identical phrasing about a fault appearing immediately on opening. One was real and was paid in full. The other three were inspected and found sound."},
+  {n: "Devin Marsh", ref: "d.marsh@…", ltv: 4120, orders: 27, rets: 11, claims: "9 defect, 1 confirmed",
+   score: 88, top: "High value, 89% of claims unconfirmed", posture: "Human review · stay generous on confirmed faults", flag: true,
+   hist: [["2026-09-09", "A1— Halden grinder", "\"grinder jams every time\"", "No fault found"],
+          ["2026-08-30", "A1— Linen set", "\"stitching came apart\"", "No fault found"],
+          ["2026-08-02", "A1— Cast pan", "\"warped on first use\"", "Confirmed — refunded in full"]],
+   why: "This is the case that argues against banning. $4,120 of lifetime value and a real fault in the history. The right action is a person on the call and no returnless offers — not a closed account."},
+  {n: "R. Okonkwo", ref: "r.okon@…", ltv: 1180, orders: 3, rets: 3, claims: "3 returnless asked, 3 granted",
+   score: 81, top: "Account 12 days old, every order returned", posture: "Human review · ID check", flag: true,
+   hist: [["2026-09-14", "A1— Espresso machine", "\"never turned up right\"", "Returnless granted"],
+          ["2026-09-10", "A1— Duvet set", "\"wrong item entirely\"", "Returnless granted"],
+          ["2026-09-07", "A1— Table lamp", "\"smashed\"", "Returnless granted"]],
+   why: "Three high-value orders in twelve days, all ending in a keep-the-item refund. No single claim is implausible; the pattern is. Flagged on account age × order value × returnless streak, not on any one call."},
+  {n: "J. Castellanos", ref: "jc.mail@…", ltv: 2240, orders: 9, rets: 6, claims: "6 defect, 2 confirmed",
+   score: 91, top: "Six accounts share this shipping address", posture: "Human review · ID check", flag: true,
+   hist: [["2026-09-12", "A1— Pendant light", "\"glass shattered\"", "No fault found"],
+          ["2026-08-21", "A1— Rug, 2x3m", "\"colour totally wrong\"", "Confirmed — listing photo"]],
+   why: "The address cluster is the signal. Six accounts, six payment methods, one delivery point, and a combined return rate of 64%."},
+  {n: "A. Feldt", ref: "a.feldt@…", ltv: 1650, orders: 12, rets: 4, claims: "3 defect, 3 confirmed",
+   score: 22, top: "Reviewed and cleared — genuine faults", posture: "Standard", flag: false, cleared: "2026-09-04 by M. Ruiz",
+   hist: [["2026-08-27", "A1— Kettle", "\"stopped heating after a week\"", "Confirmed"],
+          ["2026-07-15", "A1— Toaster", "\"one side never browns\"", "Confirmed"]],
+   why: "Flagged by return rate, cleared by a human: every claim was inspected and real. The account bought a faulty production batch. Kept visible so the false positive is on the record."},
+  {n: "Marcus Lee", ref: "m.lee@…", ltv: 2100, orders: 19, rets: 4, claims: "1 defect, 1 confirmed",
+   score: 12, top: "Below cohort return rate", posture: "Generous — protect this account", flag: false,
+   hist: [["2026-09-16", "A1077 Calder duvet", "\"wrong shade of grey\"", "Preference — partial, kept"]],
+   why: "High value, low return rate, honest reasons. The posture here is deliberately generous: this is an account worth over-serving."},
+  {n: "Dana Whitfield", ref: "d.whitfield@…", ltv: 840, orders: 9, rets: 2, claims: "1 defect, 1 confirmed",
+   score: 15, top: "Normal", posture: "Standard", flag: false,
+   hist: [["2026-09-17", "A1042 Vireo blender", "\"one speed stopped working\"", "Confirmed — known SKU fault"]],
+   why: "Nothing unusual. Included so you can see what an ordinary account looks like beside a flagged one."},
+  {n: "Priya Raman", ref: "p.raman@…", ltv: 349, orders: 1, rets: 1, claims: "1 defect, 1 confirmed",
+   score: 31, top: "Insufficient history — not a risk finding", posture: "Standard", flag: false,
+   hist: [["2026-09-18", "A1103 Nomad carry-on", "\"wheel scuffed out of the box\"", "Confirmed"]],
+   why: "One order, one return. The score is mid-range because there is no history to score, and we say so rather than implying suspicion. Thin-history accounts are never routed on score alone."},
+];
+
+const COHORT = [
+  {b: "0%", n: 4210}, {b: "1–10%", n: 2886}, {b: "11–20%", n: 792},
+  {b: "21–30%", n: 331}, {b: "31–40%", n: 118}, {b: "41–50%", n: 52},
+  {b: "51–70%", n: 17}, {b: "71%+", n: 6},
+];
+const COHORT_FLAG = 5; // index from which the tail is flagged
+
+/* --- review queue --------------------------------------------------- */
+const QUEUE = [
+  {id: "c-8841", order: "A1077", cust: "Marcus Lee", conf: 42, why: "Fault unclear",
+   said: "it's not right, I mean it works but it's just not… you know, not what I thought. hard to say if it's broken or if it's me",
+   fields: [["condition", "used", 88], ["is_defect", "true (assumed)", 42], ["wants_replacement", "false", 79]],
+   action: "Returnless refund — $218.00", reason: "Confidence below 60%: treated as a defect, paid in full, no return asked for.",
+   ask: "Was this a fault or a preference? Your answer trains the classifier for bedding."},
+  {id: "c-8839", order: "A1042", cust: "Dana Whitfield", conf: 58, why: "Fault unclear",
+   said: "the middle speed does something weird, sort of stutters, but the others are fine so maybe that's normal?",
+   fields: [["condition", "used", 91], ["is_defect", "true (assumed)", 58], ["wants_replacement", "unclear", 46]],
+   action: "Full refund with return — $129.00", reason: "Treated as a defect. Resale at $40.60 still beats $28 of logistics, so we asked for it back.",
+   ask: "Third report of stuttering on this SKU this week. Confirm and we open a quality radar."},
+  {id: "c-8836", order: "A1150", cust: "R. Okonkwo", conf: 77, why: "Risk flag",
+   said: "it never turned up working, I want my money and I'm not shipping this thing anywhere",
+   fields: [["condition", "damaged", 82], ["is_defect", "true", 77], ["wants_replacement", "false", 90]],
+   action: "Escalated to a human — $780.00", reason: "Over the $400 cap and on a risk-flagged account. Both routes lead to a person; neither denies the refund.",
+   ask: "Account is 12 days old with three returnless requests. Verify identity before paying out."},
+];
+
+/* --- intelligence --------------------------------------------------- */
+const REASONS = [
+  {l: "Defective / stopped working", n: 704},
+  {l: "Wrong size or fit", n: 592},
+  {l: "Not as described (colour, material)", n: 511},
+  {l: "Changed mind", n: 438},
+  {l: "Arrived damaged", n: 301},
+  {l: "Found it cheaper elsewhere", n: 161},
+  {l: "Late delivery", n: 140},
+];
+const REASON_TOTAL = REASONS.reduce((s, r) => s + r.n, 0);
+
+const DEFECTS = [
+  {sku: "A1150", item: "Halden Espresso Machine", rate: 9.8, base: 3.1, n: 214,
+   phrase: "\"leaks from the group head\"", pp: 61, cost: 22700, verdict: "bad"},
+  {sku: "A1042", item: "Vireo 900W Blender", rate: 11.4, base: 3.1, n: 341,
+   phrase: "\"speed selector stopped working\"", pp: 68, cost: 18200, verdict: "bad"},
+  {sku: "A1077", item: "Calder Linen Duvet, King", rate: 4.2, base: 3.8, n: 412,
+   phrase: "\"colour differs from the photo\"", pp: 74, cost: 9400, verdict: "photo"},
+  {sku: "A1103", item: "Nomad Carry-On 40L", rate: 2.1, base: 3.4, n: 305,
+   phrase: "\"scuffed wheel out of the box\"", pp: 22, cost: 2100, verdict: "ok"},
+  {sku: "A1188", item: "Trail Runner Socks, 3-pack", rate: 1.8, base: 2.9, n: 688,
+   phrase: "\"too tight\"", pp: 41, cost: 1600, verdict: "ok"},
+];
+
+const FIXES = [
+  {t: "Halden Espresso — group head gasket", cost: 22700, effort: "Supplier",
+   d: "61% of its returns name the same leak. 9.8% defect rate against a 3.1% category baseline. This is a component problem, not a returns problem.",
+   next: "Open a supplier quality claim on the gasket batch. Hold the SKU if the next 20 units repeat."},
+  {t: "Vireo Blender — speed selector", cost: 18200, effort: "Supplier",
+   d: "Highest defect rate you have, 11.4%. The phrase is consistent enough to name the part.",
+   next: "Pull the batch codes on the 341 returns and check whether it is one production run."},
+  {t: "Calder Duvet — replace the listing photograph", cost: 9400, effort: "One afternoon",
+   d: "Not a defect at all: 4.2% is near baseline. But 74% of its returns say the colour was wrong. Your photo is lit warm and the linen is cool grey.",
+   next: "Reshoot in neutral light and add a true-colour swatch. Cheapest fix on this page."},
+  {t: "Trail socks — sizing guidance", cost: 1600, effort: "Copy change",
+   d: "Not faulty, but 41% of returns say 'too tight'. The size chart is a generic one.",
+   next: "Add measured sizing and a 'runs small' note."},
+];
+
+const CHURN = [
+  ["Escalated calls", "176 customers", "3.23 CSAT · 38% churn within 90 days",
+   "Escalation is your worst experience by a wide margin. Raise the autonomous cap from $400 to $600 for accounts with clean history — 71 of the 176 were escalated purely on order value.",
+   "−$14,900 churn exposure"],
+  ["Store credit offers", "148 customers", "3.92 CSAT · 19% churn",
+   "Customers read a credit offer as being fobbed off. It saves cash but costs goodwill. Cap it at accounts that have used credit before.",
+   "−$6,200 churn exposure"],
+  ["Second-decline calls", "247 customers", "3.61 CSAT · 24% churn",
+   "These customers said no twice before getting the refund they were always entitled to. At the recommended dial position this drops to 8.7% of calls.",
+   "−$11,400 churn exposure"],
+  ["Repeat defect buyers", "88 customers", "2.94 CSAT · 47% churn",
+   "Customers who hit a faulty SKU twice. Nearly half leave. The fix is upstream, not in the returns flow.",
+   "−$21,800 churn exposure"],
+];
+
+const SPARK = [2.1, 2.6, 2.4, 3.1, 3.5, 3.2, 4.1, 4.4, 4.9, 4.6, 5.4, 5.8, 6.2, 6.9];
+
+const DECISION_ORDER = [
+  ["1", "Guardrails", "Escalate on a request for a human, or above the $400 cap. Flag late returns and accounts with 3+ prior returns — flag for review, never confront the customer."],
+  ["2", "Declines", "Two refusals short-circuits everything below. Hand over the refund."],
+  ["3", "Fault", "Defect decided before margin. Faulty and uneconomic to ship back → returnless. Faulty and worth the freight → full refund with return. Wants the same item → exchange."],
+  ["4", "Preference", "Not a fault: offer a partial with the item kept, with the full refund always available on ask."],
+  ["5", "Scoring", "Every outcome scored as net-to-merchant against the baseline of full refund with return. The gap is the margin saved, and it is logged."],
+];
+
+const LOG_SEED = [
+  {_when: "14:22:08", item: "Calder Linen Duvet, King", reason: "wrong shade of grey", offer_label: "40% back, keep the item", reason_code: "preference_return_offer_choice", margin_saved: 184.77, escalated: null},
+  {_when: "14:18:51", item: "Trail Runner Socks, 3-pack", reason: "too tight", offer_label: "Full refund, keep the item", reason_code: "our_defect_uneconomic_to_return", margin_saved: 11.50, escalated: null},
+  {_when: "14:11:34", item: "Halden Espresso Machine", reason: "leaking from the group head", offer_label: "Full refund, return the item", reason_code: "escalated_to_human", margin_saved: 0, escalated: "above_autonomous_refund_cap"},
+  {_when: "14:04:12", item: "Nomad Carry-On 40L", reason: "scuffed wheel", offer_label: "Replacement sent out", reason_code: "customer_asked_for_replacement", margin_saved: 211.00, escalated: null},
+  {_when: "13:57:40", item: "Vireo 900W Blender", reason: "one speed stopped working", offer_label: "Full refund, return the item", reason_code: "our_defect_resale_justifies_freight", margin_saved: 0, escalated: null},
+];
+
+const TAPE = [
+  ["Agent", "Hi, you've reached Harlow returns. Can I grab your order number?"],
+  ["Marcus", "Yeah it's A one zero seven seven."],
+  ["Agent", "Got it — the Calder duvet, Marcus. What went wrong with it?"],
+  ["Marcus", "The grey is way darker than the photo. It's not damaged or anything, it just doesn't work in the room."],
+  ["Agent", "That's fair, and annoying. Shipping a king duvet back is a hassle for you — I can put $87.20 back on your card today and you keep it. Or a full refund if you'd rather return it."],
+  ["Marcus", "Oh — I can keep it? Yeah, let's do that."],
+];
+
+/* ==================================================================
+   CHART HELPERS -- plain SVG. Thin marks, hairline chrome, 2px surface
+   gaps, rounded data-ends, hover tooltips, table twin for every chart.
+   ================================================================== */
+const SVGNS = "http://www.w3.org/2000/svg";
+const el = (t, a = {}) => { const n = document.createElementNS(SVGNS, t);
+  for (const k in a) n.setAttribute(k, a[k]); return n; };
+const tip = document.getElementById("tip");
+function hover(node, html) {
+  node.classList.add("hit");
+  node.addEventListener("pointerenter", e => {
+    tip.innerHTML = html; tip.style.opacity = 1; moveTip(e);
+  });
+  node.addEventListener("pointermove", moveTip);
+  node.addEventListener("pointerleave", () => tip.style.opacity = 0);
+}
+function moveTip(e) {
+  const p = 14, w = tip.offsetWidth, h = tip.offsetHeight;
+  let x = e.clientX + p, y = e.clientY - h - p;
+  if (x + w > innerWidth - 8) x = e.clientX - w - p;
+  if (y < 8) y = e.clientY + p;
+  tip.style.left = x + "px"; tip.style.top = y + "px";
+}
+/* Horizontal bar. Rounded data-end, square at the baseline -- so rl/rr are
+   independent: a plain bar rounds only its right end, and a stacked segment
+   rounds only the end that is actually the outside of the stack. */
+function hbar(x, y, w, h, rr = 4, rl = 0) {
+  const cap = Math.min(w / 2, h / 2);
+  rr = Math.max(0, Math.min(rr, cap));
+  rl = Math.max(0, Math.min(rl, cap));
+  return `M${x + rl},${y} H${x + w - rr}`
+       + (rr ? ` A${rr},${rr} 0 0 1 ${x + w},${y + rr}` : "")
+       + ` V${y + h - rr}`
+       + (rr ? ` A${rr},${rr} 0 0 1 ${x + w - rr},${y + h}` : "")
+       + ` H${x + rl}`
+       + (rl ? ` A${rl},${rl} 0 0 1 ${x},${y + h - rl}` : ` V${y}`)
+       + (rl ? ` V${y + rl} A${rl},${rl} 0 0 1 ${x + rl},${y}` : "")
+       + " Z";
+}
+
+/* --- horizontal bar chart, single series --------------------------- */
+function barChart(host, rows, opts = {}) {
+  const {labelW = 210, barH = 18, gap = 14, fmt = v => v.toLocaleString(),
+         color = "var(--series-1)", emphasis = null} = opts;
+  const max = Math.max(...rows.map(r => r.v));
+  const w = host.clientWidth || 520, plotW = Math.max(120, w - labelW - 68);
+  const h = rows.length * (barH + gap) - gap;
+  const svg = el("svg", {width: "100%", height: h + 4, viewBox: `0 0 ${w} ${h + 4}`,
+                         role: "img", "aria-label": opts.aria || "bar chart"});
+  rows.forEach((r, i) => {
+    const y = i * (barH + gap);
+    const lab = el("text", {x: labelW - 12, y: y + barH / 2 + 4, "text-anchor": "end"});
+    lab.setAttribute("class", "cat"); lab.textContent = r.l; svg.appendChild(lab);
+    const bw = Math.max(2, (r.v / max) * plotW);
+    const fill = emphasis ? (emphasis(r, i) ? color : "var(--deemph)") : color;
+    const p = el("path", {d: hbar(labelW, y, bw, barH), fill});
+    hover(p, `<b>${r.l}</b>${r.tip || fmt(r.v)}`);
+    svg.appendChild(p);
+    const vt = el("text", {x: labelW + bw + 9, y: y + barH / 2 + 4});
+    vt.setAttribute("class", "val"); vt.textContent = fmt(r.v); svg.appendChild(vt);
+  });
+  host.innerHTML = ""; host.appendChild(svg);
+}
+
+/* --- line chart, single series, marked position -------------------- */
+function lineChart(host, vals, opts = {}) {
+  const {h = 168, fmt = v => v, mark = null, rec = null, yPad = 0.18,
+         xLabels = null, yTicks = 4} = opts;
+  const w = host.clientWidth || 440;
+  const L = 46, R = 14, T = 12, B = 30;
+  const pw = w - L - R, ph = h - T - B;
+  const lo = Math.min(...vals), hi = Math.max(...vals);
+  const span = (hi - lo) || 1, y0 = lo - span * yPad, y1 = hi + span * yPad;
+  const X = i => L + (i / (vals.length - 1)) * pw;
+  const Y = v => T + ph - ((v - y0) / (y1 - y0)) * ph;
+  const svg = el("svg", {width: "100%", height: h, viewBox: `0 0 ${w} ${h}`,
+                         role: "img", "aria-label": opts.aria || "line chart"});
+  for (let t = 0; t <= yTicks; t++) {
+    const v = y0 + (t / yTicks) * (y1 - y0), y = Y(v);
+    svg.appendChild(el("line", {x1: L, x2: L + pw, y1: y, y2: y, stroke: "var(--grid)", "stroke-width": 1}));
+    const tx = el("text", {x: L - 9, y: y + 4, "text-anchor": "end"});
+    tx.textContent = fmt(v); svg.appendChild(tx);
+  }
+  if (rec !== null) {
+    svg.appendChild(el("line", {x1: X(rec), x2: X(rec), y1: T, y2: T + ph,
+                                stroke: "var(--axis)", "stroke-width": 1}));
+    const rt = el("text", {x: X(rec), y: T + ph + 20, "text-anchor": "middle"});
+    rt.textContent = "recommended"; svg.appendChild(rt);
+  }
+  svg.appendChild(el("polyline", {
+    points: vals.map((v, i) => `${X(i)},${Y(v)}`).join(" "),
+    fill: "none", stroke: "var(--series-1)", "stroke-width": 2,
+    "stroke-linejoin": "round", "stroke-linecap": "round"}));
+  vals.forEach((v, i) => {
+    const hit = el("rect", {x: X(i) - pw / (vals.length * 2) - 2, y: T,
+      width: pw / vals.length + 4, height: ph, fill: "transparent"});
+    hover(hit, `Position ${i}<br>${fmt(v)}`);
+    svg.appendChild(hit);
+  });
+  if (mark !== null) {
+    svg.appendChild(el("circle", {cx: X(mark), cy: Y(vals[mark]), r: 6,
+      fill: "var(--series-1)", stroke: "var(--panel)", "stroke-width": 2}));
+    const t = el("text", {x: X(mark), y: Y(vals[mark]) - 14, "text-anchor": "middle"});
+    t.setAttribute("class", "val"); t.textContent = fmt(vals[mark]); svg.appendChild(t);
+  }
+  if (xLabels) xLabels.forEach(([i, s]) => {
+    const t = el("text", {x: X(i), y: T + ph + 20,
+      "text-anchor": i === 0 ? "start" : i === vals.length - 1 ? "end" : "middle"});
+    t.textContent = s; svg.appendChild(t);
+  });
+  host.innerHTML = ""; host.appendChild(svg);
+}
+
+/* --- sparkline ----------------------------------------------------- */
+function sparkline(host, vals) {
+  const w = host.clientWidth || 380, h = 54;
+  const lo = Math.min(...vals), hi = Math.max(...vals), sp = (hi - lo) || 1;
+  const X = i => (i / (vals.length - 1)) * (w - 8) + 4;
+  const Y = v => h - 8 - ((v - lo) / sp) * (h - 18);
+  const svg = el("svg", {width: "100%", height: h, viewBox: `0 0 ${w} ${h}`,
+                         role: "img", "aria-label": "Margin saved, last 14 weeks"});
+  svg.appendChild(el("polyline", {points: vals.map((v, i) => `${X(i)},${Y(v)}`).join(" "),
+    fill: "none", stroke: "var(--series-1)", "stroke-width": 2,
+    "stroke-linejoin": "round", "stroke-linecap": "round"}));
+  const i = vals.length - 1;
+  svg.appendChild(el("circle", {cx: X(i), cy: Y(vals[i]), r: 4,
+    fill: "var(--series-1)", stroke: "var(--panel)", "stroke-width": 2}));
+  host.innerHTML = "";
+  const cap = document.createElement("p");
+  cap.className = "sub"; cap.style.fontSize = "12.5px"; cap.style.marginBottom = "6px";
+  cap.textContent = "Weekly margin saved, last 14 weeks";
+  host.appendChild(cap); host.appendChild(svg);
+}
+
+/* --- diverging stacked bar ----------------------------------------- */
+function divergingStack(host, rows) {
+  const labelW = 190, barH = 20, gap = 16, GAPPX = 2;
+  const w = host.clientWidth || 640, plotW = Math.max(160, w - labelW - 74);
+  const h = rows.length * (barH + gap) - gap + 26;
+  const svg = el("svg", {width: "100%", height: h, viewBox: `0 0 ${w} ${h}`,
+                         role: "img", "aria-label": "Satisfaction distribution by outcome"});
+  rows.forEach((r, i) => {
+    const y = i * (barH + gap);
+    const lab = el("text", {x: labelW - 12, y: y + barH / 2 + 4, "text-anchor": "end"});
+    lab.setAttribute("class", "cat"); lab.textContent = r.o; svg.appendChild(lab);
+    let x = labelW;
+    r.d.forEach((v, k) => {
+      if (v <= 0) return;
+      const segW = (v / 100) * plotW - GAPPX;
+      if (segW <= 0.5) { x += (v / 100) * plotW; return; }
+      const first = k === 0, last = !r.d.slice(k + 1).some(z => z > 0);
+      /* Round only the ends that are the outside of the whole bar. An
+         interior segment stays square at both ends; the 2px surface gap
+         is what separates it from its neighbour, never a stroke. */
+      const p = el("path", {d: hbar(x, y, segW, barH, last ? 4 : 0, first ? 4 : 0),
+                            fill: CSAT_KEYS[k].c});
+      hover(p, `<b>${r.o}</b>${CSAT_KEYS[k].l}: ${v}% of ${r.n.toLocaleString()}`);
+      svg.appendChild(p);
+      x += (v / 100) * plotW;
+    });
+    const mt = el("text", {x: labelW + plotW + 12, y: y + barH / 2 + 4});
+    mt.setAttribute("class", "val"); mt.textContent = r.mean.toFixed(2); svg.appendChild(mt);
+  });
+  const foot = el("text", {x: labelW + plotW + 12, y: rows.length * (barH + gap) + 6});
+  foot.textContent = "mean"; svg.appendChild(foot);
+  const note = el("text", {x: labelW, y: rows.length * (barH + gap) + 6});
+  note.textContent = "share of respondents, 100% per row"; svg.appendChild(note);
+  host.innerHTML = ""; host.appendChild(svg);
+}
+
+function tableTwin(host, head, rows) {
+  host.innerHTML = `<table><thead><tr>${head.map((h, i) =>
+    `<th class="${i ? "num" : ""}">${h}</th>`).join("")}</tr></thead><tbody>${
+    rows.map(r => `<tr>${r.map((c, i) =>
+      `<td class="${i ? "num" : ""}">${c}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
+}
+function viewSwap(btn, key, mode) {
+  btn.parentElement.querySelectorAll("button").forEach(b => b.classList.toggle("on", b === btn));
+  document.getElementById(key + "-chart").style.display = mode === "chart" ? "" : "none";
+  document.getElementById(key + "-table").style.display = mode === "table" ? "" : "none";
+}
+
+/* ==================================================================
+   ONBOARDING
+   ================================================================== */
+const STEP_META = [["Step 1", "Policy"], ["Step 2", "Order data"], ["Step 3", "Go live"]];
+let step = 1;
+
+function renderSteps() {
+  document.getElementById("steps").innerHTML = STEP_META.map(([k, t], i) => {
+    const n = i + 1;
+    return `<div class="step ${n === step ? "on" : ""} ${n < step ? "done" : ""}">
+      <div class="k">${n < step ? "&#10003; " + k : k}</div><div class="t">${t}</div></div>`;
+  }).join("");
+}
+function setStep(n) {
+  step = n; renderSteps();
+  document.querySelectorAll(".ob-step").forEach(s =>
+    s.style.display = +s.dataset.step === n ? "" : "none");
+  if (n === 3) document.getElementById("env-kv").innerHTML = ENVELOPE.map(([k, v]) =>
+    `<span class="k">${k}</span><span class="v">${v}</span>`).join("");
+  window.scrollTo({top: 0, behavior: "smooth"});
+}
+
+const dz = document.getElementById("dz");
+["dragenter", "dragover"].forEach(e => dz.addEventListener(e, ev => {
+  ev.preventDefault(); dz.classList.add("hot"); }));
+["dragleave", "drop"].forEach(e => dz.addEventListener(e, () => dz.classList.remove("hot")));
+dz.addEventListener("drop", ev => {
+  ev.preventDefault();
+  const f = ev.dataTransfer.files[0];
+  if (f) parseDoc(f.name, Math.max(3, Math.round(f.size / 40000)));
+});
+function pickFile(inp) { const f = inp.files[0]; if (f) parseDoc(f.name, Math.max(3, Math.round(f.size / 40000))); }
+
+/* The parse is canned. Replace the setTimeout chain with one Nebius
+   call (doc text -> the RULES shape) and the UI is unchanged. */
+function parseDoc(name, pages) {
+  document.getElementById("parsing").style.display = "";
+  document.getElementById("parsed").style.display = "none";
+  dz.style.display = "none";
+  const steps = [
+    [18, `Reading ${pages} pages…`],
+    [44, "Locating rule statements…"],
+    [68, "Mapping to the policy envelope…"],
+    [88, "Scoring confidence…"],
+    [100, "Done."],
+  ];
+  let i = 0;
+  (function tick() {
+    if (i >= steps.length) {
+      document.getElementById("doc-name").textContent = name;
+      document.getElementById("pol-doc").textContent = name;
+      document.getElementById("rule-count").textContent =
+        `${RULES.filter(r => r.conf >= 60).length} confident · ${RULES.filter(r => r.conf < 60).length} need review`;
+      renderRulesTable(document.getElementById("rules-t"), true);
+      document.getElementById("parsed").style.display = "";
+      return;
+    }
+    const [p, m] = steps[i++];
+    document.getElementById("p-bar").style.width = p + "%";
+    document.getElementById("p-pct").textContent = p + "%";
+    document.getElementById("p-msg").textContent = m;
+    setTimeout(tick, i === 1 ? 420 : 520);
+  })();
+}
+
+function confPill(c) {
+  if (c >= 90) return `<span class="pill live"><i class="dot"></i>${c}%</span>`;
+  if (c >= 60) return `<span class="pill info">${c}%</span>`;
+  return `<span class="pill warn">&#9888; ${c}%</span>`;
+}
+function renderRulesTable(host, editable) {
+  host.innerHTML = `<thead><tr>
+      <th>Rule found in your document</th><th>Maps to</th><th>Value</th>
+      <th class="num">Confidence</th></tr></thead><tbody>` +
+    RULES.map(r => `<tr>
+      <td><div ${r.pg ? "" : 'class="sub"'}>${r.pg ? "&ldquo;" + r.quote + "&rdquo;" : r.quote}</div>
+          ${r.pg ? `<div class="sub" style="font-size:12px;margin-top:3px">page ${r.pg}</div>` : ""}</td>
+      <td><code>${r.field}</code></td>
+      <td>${editable
+            ? `<input value="${r.value}" style="min-width:132px;padding:5px 9px;font-size:13.5px">`
+            : `<b>${r.value}</b>`}</td>
+      <td class="num">${confPill(r.conf)}</td></tr>`).join("") + "</tbody>";
+}
+
+document.getElementById("srcs").innerHTML = SOURCES.map(s =>
+  `<button class="src" data-src="${s.id}" onclick="pickSource('${s.id}')">
+     <span class="ic">${s.ic}</span>
+     <span><span class="n">${s.n}${s.rec ? ' <span class="pill info" style="margin-left:4px">detected</span>' : ""}</span>
+     <div class="m">${s.m}</div></span></button>`).join("");
+
+function pickSource(id) {
+  document.querySelectorAll(".src").forEach(b => b.classList.toggle("on", b.dataset.src === id));
+  tableTwin(document.getElementById("map-t"), ["Your field", "Our field", ""],
+    FIELD_MAP.map(([a, b, st]) => [
+      `<code>${a}</code>`, `<code>${b}</code>`,
+      st === "ok" ? '<span class="pill live"><i class="dot"></i>mapped</span>'
+      : st === "default" ? '<span class="pill">policy default · $6.00</span>'
+      : '<span class="pill info">derived from resale history</span>']));
+  document.getElementById("mapping").style.display = "";
+}
+
+/* ==================================================================
+   CONSOLE
+   ================================================================== */
+const PAGES = [
+  {id: "live", n: "Live"},
+  {id: "decisions", n: "Smart decisions", star: true},
+  {id: "risk", n: "Risk &amp; fraud", star: true},
+  {id: "review", n: "Review queue", ct: 3},
+  {id: "intel", n: "Intelligence"},
+  {id: "policy", n: "Policy"},
+];
+document.getElementById("nav").innerHTML =
+  `<div class="nav-l">Operate</div>` +
+  PAGES.slice(0, 1).map(navItem).join("") +
+  `<div class="nav-l">Decide</div>` +
+  PAGES.slice(1, 4).map(navItem).join("") +
+  `<div class="nav-l">Understand</div>` +
+  PAGES.slice(4).map(navItem).join("");
+function navItem(p) {
+  return `<button class="nav-i" data-nav="${p.id}" onclick="go('${p.id}')">
+    ${p.star ? '<span class="star">&#9733;</span>' : ""}<span>${p.n}</span>
+    ${p.ct ? `<span class="ct">${p.ct}</span>` : ""}</button>`;
+}
+
+let current = "live";
+function go(id) {
+  current = id;
+  document.querySelectorAll(".page").forEach(p => p.classList.toggle("on", p.dataset.page === id));
+  document.querySelectorAll(".nav-i").forEach(b => b.classList.toggle("on", b.dataset.nav === id));
+  window.scrollTo({top: 0});
+  redraw();
+}
+function goLive(skip) {
+  document.getElementById("onb").style.display = "none";
+  document.getElementById("shell").classList.add("on");
+  if (skip) {
+    document.getElementById("rule-count") &&
+      (document.getElementById("doc-name").textContent = "Harlow_CS_Returns_Training_v4.pdf");
+  }
+  buildConsole(); go("live");
+}
+function restart() {
+  document.getElementById("shell").classList.remove("on");
+  document.getElementById("onb").style.display = "";
+  dz.style.display = ""; document.getElementById("parsed").style.display = "none";
+  document.getElementById("parsing").style.display = "none";
+  document.getElementById("mapping").style.display = "none";
+  document.getElementById("p-bar").style.width = "0";
+  setStep(1);
+}
+function toggleTheme() {
+  const cur = document.documentElement.getAttribute("data-theme");
+  const dark = cur ? cur === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+  document.documentElement.setAttribute("data-theme", dark ? "light" : "dark");
+  redraw();
+}
+
+/* ---------- build the static parts once ---------- */
+let built = false;
+function buildConsole() {
+  if (built) { setDial(+document.getElementById("dial").value); return; }
+  built = true;
+  /* live: transcript */
+  document.getElementById("tape").innerHTML = TAPE.map(([w, t]) =>
+    `<div class="turn"><span class="who">${w}</span><span>${t}</span></div>`).join("");
+
+  /* decisions: learned thresholds */
+  const t = document.getElementById("thr-t");
+  t.innerHTML = `<thead><tr>
+      <th>Category</th><th class="num">Returns</th><th>Returnless ceiling</th>
+      <th class="num">Auto cap</th><th class="num">CSAT</th><th class="num">Margin / return</th>
+      <th>Why</th></tr></thead><tbody>` +
+    THRESHOLDS.map(r => {
+      const changed = r.ret !== r.was;
+      const dir = changed && parseFloat(r.ret.slice(1)) > parseFloat(r.was.slice(1));
+      return `<tr>
+        <td><b>${r.cat}</b></td>
+        <td class="num">${r.n}</td>
+        <td><b>${r.ret}</b>${changed
+          ? ` <span class="sub" style="font-size:12px">from ${r.was}</span>
+              <span class="${dir ? "up" : "down"}" style="font-size:12px">${dir ? "&uarr;" : "&darr;"}</span>`
+          : ' <span class="sub" style="font-size:12px">unchanged</span>'}</td>
+        <td class="num">${r.cap}</td>
+        <td class="num">${r.csat.toFixed(2)}</td>
+        <td class="num up">+${money2(r.per)}</td>
+        <td class="sub" style="font-size:13px;max-width:30ch">${r.basis}</td></tr>`;
+    }).join("") + "</tbody>";
+
+  /* decisions: cost picker */
+  document.getElementById("cost-pick").innerHTML = Object.entries(COSTS)
+    .map(([k, v]) => `<option value="${k}">${k} — ${v.item}</option>`).join("");
+  renderCost();
+
+  /* csat legend */
+  document.getElementById("csat-legend").innerHTML = CSAT_KEYS.map(k =>
+    `<span><i style="background:${k.c}"></i>${k.l}</span>`).join("");
+
+  /* risk: signals */
+  document.getElementById("sig-list").innerHTML = SIGNALS.map(([n, w]) =>
+    `<span>${n}</span><span class="b"><i style="width:${w / 32 * 100}%"></i></span>
+     <span class="num sub">${w}%</span>`).join("");
+  renderRisk();
+
+  /* review queue */
+  document.getElementById("queue").innerHTML = QUEUE.map(q => `
+    <div class="detail" style="margin-bottom:16px" id="q-${q.id}">
+      <div class="spread" style="align-items:flex-start">
+        <div>
+          <div class="row" style="gap:8px">
+            <b class="mono">${q.order}</b><span class="sub">${q.cust}</span>
+            ${q.why === "Risk flag" ? '<span class="pill crit">&#9888; risk flag</span>'
+                                    : '<span class="pill warn">&#9888; low confidence</span>'}
+          </div>
+          <div class="quote" style="margin-top:12px;max-width:62ch">&ldquo;${q.said}&rdquo;</div>
+        </div>
+        <div style="text-align:right;min-width:120px">
+          <div class="sub" style="font-size:12.5px">Confidence</div>
+          <div style="font-size:21px;font-weight:600">${q.conf}%</div>
+          <div class="meter ${q.conf < 60 ? "s-warn" : "s-serious"}" style="margin-top:6px">
+            <i style="width:${q.conf}%"></i></div>
+        </div>
+      </div>
+      <div class="grid g2" style="margin-top:18px">
+        <div>
+          <p class="eyebrow" style="margin-bottom:9px">Extracted</p>
+          <div class="kv">${q.fields.map(([k, v, c]) =>
+            `<span class="k">${k}</span><span class="v">${v} <span class="sub">· ${c}%</span></span>`).join("")}</div>
+        </div>
+        <div>
+          <p class="eyebrow" style="margin-bottom:9px">Already paid out</p>
+          <p style="font-weight:600">${q.action}</p>
+          <p class="sub" style="font-size:13px;margin-top:5px">${q.reason}</p>
+        </div>
+      </div>
+      <div class="note" style="margin-top:16px"><b>What we need from you.</b> ${q.ask}</div>
+      <div class="row" style="margin-top:16px">
+        <button class="btn sm" onclick="resolve('${q.id}','Confirmed')">Confirm the call</button>
+        <button class="btn ghost sm" onclick="resolve('${q.id}','Reclassified')">Reclassify</button>
+        <button class="btn ghost sm" onclick="resolve('${q.id}','Sent to a person')">Put a person on it</button>
+      </div>
+    </div>`).join("");
+
+  /* intelligence: fix list */
+  document.getElementById("fix-list").innerHTML = FIXES.map(f => `
+    <div style="border-left:2px solid var(--series-1);padding-left:14px">
+      <div class="spread"><b style="font-size:14px">${f.t}</b>
+        <span class="num" style="font-weight:600">${money(f.cost)}<span class="sub" style="font-weight:400;font-size:12px">/qtr</span></span></div>
+      <p class="sub" style="font-size:13px;margin-top:5px">${f.d}</p>
+      <p style="font-size:13px;margin-top:7px"><span class="eyebrow">Next</span> ${f.next}
+        <span class="pill" style="margin-left:6px">${f.effort}</span></p>
+    </div>`).join("");
+
+  /* intelligence: churn */
+  tableTwin(document.getElementById("churn-t"),
+    ["Segment", "Size", "Experience", "Recommended action", "Expected effect"],
+    CHURN.map(([a, b, c, d, e]) => [
+      `<b>${a}</b>`, b, `<span class="sub">${c}</span>`,
+      `<span style="display:block;max-width:44ch;font-size:13.5px">${d}</span>`,
+      `<span class="up">${e}</span>`]));
+  document.querySelectorAll("#churn-t td").forEach((td, i) => {
+    if (i % 5 !== 0) td.classList.remove("num");
+  });
+  document.querySelectorAll("#churn-t th").forEach(th => th.classList.remove("num"));
+
+  /* policy */
+  renderRulesTable(document.getElementById("pol-t"), false);
+  tableTwin(document.getElementById("order-t"), ["#", "Gate", "What it does"],
+    DECISION_ORDER.map(([a, b, c]) => [a, `<b>${b}</b>`, `<span style="max-width:78ch;display:block">${c}</span>`]));
+  document.querySelectorAll("#order-t td, #order-t th").forEach(x => x.classList.remove("num"));
+
+  setDial(REC);
+  refreshLog();
+  setInterval(refreshLog, 4000);
+}
+
+/* ---------- the dial ---------- */
+function setDial(i) {
+  document.getElementById("dial").value = i;
+  const m = CURVE.margin[i], c = CURVE.csat[i];
+  document.getElementById("d-margin").textContent = money(m * 1000);
+  document.getElementById("d-csat").textContent = c.toFixed(2);
+  document.getElementById("d-dec").textContent = CURVE.dec[i].toFixed(1) + "%";
+  document.getElementById("d-escal").textContent = CURVE.escal[i].toFixed(1) + "%";
+
+  const dm = m - CURVE.margin[REC], dc = c - HUMAN_CSAT;
+  document.getElementById("d-margin-d").innerHTML = i === REC
+    ? "<span class='up'>Optimum</span> on your history"
+    : `<span class="down">${money(dm * 1000)}</span> vs the optimum`;
+  document.getElementById("d-csat-d").innerHTML =
+    `<span class="${dc >= 0 ? "up" : "down"}">${dc >= 0 ? "+" : ""}${dc.toFixed(2)}</span> vs your human flow (${HUMAN_CSAT})`;
+
+  const note = document.getElementById("d-note");
+  if (i === REC) {
+    note.className = "note good";
+    note.innerHTML = `<b>Position ${i} — recommended.</b> The peak of the margin curve.
+      $${(m).toFixed(1)}k per 1,000 returns, CSAT 4.46, and only 8.7% of customers refuse
+      twice. Past here, margin <em>falls</em>: harder offers make people refuse, a second
+      refusal hands over the full refund by policy, and you have spent goodwill to arrive
+      at the outcome you were always going to pay.`;
+  } else if (i > REC) {
+    note.className = "note crit";
+    note.innerHTML = `<b>Past the optimum.</b> Margin is ${money((CURVE.margin[REC] - m) * 1000)}
+      <em>worse</em> than position ${REC} and CSAT is ${(CURVE.csat[REC] - c).toFixed(2)} lower.
+      ${CURVE.dec[i].toFixed(1)}% of customers now refuse twice, and every one of those becomes a
+      full refund anyway. This setting costs you money and satisfaction at the same time —
+      which is the counter-intuitive result in the data, and the one worth knowing.`;
+  } else {
+    note.className = "note";
+    note.innerHTML = `<b>Conservative.</b> CSAT ${c.toFixed(2)}, the best you can buy, but you are
+      leaving ${money((CURVE.margin[REC] - m) * 1000)} per 1,000 returns on the table against
+      position ${REC}. Reasonable during a first pilot, or for a category where you are
+      rebuilding trust.`;
+  }
+  drawDialCharts();
+}
+
+function drawDialCharts() {
+  const i = +document.getElementById("dial").value;
+  lineChart(document.getElementById("mChart-chart"), CURVE.margin, {
+    fmt: v => "$" + v.toFixed(0) + "k", mark: i, rec: REC,
+    xLabels: [[0, "customer-first"], [10, "margin-first"]],
+    aria: "Margin saved per 1,000 returns by dial position"});
+  tableTwin(document.getElementById("mChart-table"),
+    ["Position", "Margin saved / 1,000"],
+    CURVE.margin.map((v, k) => [k === REC ? `${k} (recommended)` : k, money(v * 1000)]));
+  lineChart(document.getElementById("cChart-chart"), CURVE.csat, {
+    fmt: v => v.toFixed(2), mark: i, rec: REC,
+    xLabels: [[0, "customer-first"], [10, "margin-first"]],
+    aria: "Return CSAT by dial position"});
+  tableTwin(document.getElementById("cChart-table"),
+    ["Position", "Return CSAT", "Refused twice"],
+    CURVE.csat.map((v, k) => [k === REC ? `${k} (recommended)` : k, v.toFixed(2), CURVE.dec[k].toFixed(1) + "%"]));
+}
+
+/* ---------- cost of a refund ---------- */
+function renderCost() {
+  const k = document.getElementById("cost-pick").value || "A1077";
+  const c = COSTS[k];
+  const sum = rows => rows.reduce((s, [, v]) => s + v, 0);
+  const fill = (host, rows) => {
+    document.getElementById(host).innerHTML = rows.map(([l, v]) =>
+      `<span class="k">${l}</span><span class="v">${v === 0 ? "—" : money2(v)}</span>`).join("")
+      + `<span class="k tot">True cost to serve</span><span class="v tot">${money2(sum(rows))}</span>`;
+  };
+  fill("cost-new", c.now); fill("cost-old", c.old);
+  const a = sum(c.now), b = sum(c.old), max = Math.max(a, b);
+  const bar = (label, v, colour) => `
+    <div style="margin-bottom:10px">
+      <div class="spread" style="font-size:13px;margin-bottom:5px">
+        <span class="sub">${label}</span><span class="num" style="font-weight:600">${money2(v)}</span></div>
+      <div style="height:14px;background:var(--sunk);border-radius:4px;overflow:hidden">
+        <div style="height:100%;width:${v / max * 100}%;background:${colour};border-radius:0 4px 4px 0"></div>
+      </div></div>`;
+  document.getElementById("cost-bar").innerHTML =
+    bar("With Clement", a, "var(--series-1)") + bar("Your previous flow", b, "var(--deemph)");
+  document.getElementById("cost-note").innerHTML =
+    `<b>${money2(b - a)} cheaper on this single return</b> — ${(100 - a / b * 100).toFixed(0)}% of
+     the old cost to serve. ${c.note}`;
+}
+
+/* ---------- risk ---------- */
+function sev(s) { return s >= 85 ? "s-crit" : s >= 70 ? "s-serious" : s >= 45 ? "s-warn" : "s-good"; }
+function renderRisk() {
+  const f = document.getElementById("r-filter").value;
+  const rows = ACCOUNTS.filter(a => f === "all" ? true : f === "flag" ? a.flag : !a.flag);
+  document.getElementById("risk-t").innerHTML = `<thead><tr>
+      <th>Account</th><th class="num">LTV</th><th class="num">Returns</th>
+      <th>Claims vs confirmed</th><th class="num">Risk</th><th>Posture</th>
+    </tr></thead><tbody>` + rows.map((a, i) => `
+      <tr class="clickable" onclick="riskDetail(${ACCOUNTS.indexOf(a)})">
+        <td><b>${a.n}</b><div class="sub" style="font-size:12px">${a.ref}</div></td>
+        <td class="num">${money(a.ltv)}</td>
+        <td class="num">${a.rets}/${a.orders}<div class="sub" style="font-size:12px">${Math.round(a.rets / a.orders * 100)}%</div></td>
+        <td style="font-size:13.5px">${a.claims}<div class="sub" style="font-size:12px;max-width:26ch">${a.top}</div></td>
+        <td class="num"><b>${a.score}</b>
+          <div class="meter ${sev(a.score)}" style="margin-top:5px"><i style="width:${a.score}%"></i></div></td>
+        <td style="font-size:13.5px">${a.posture}
+          ${a.cleared ? `<div class="sub" style="font-size:12px">cleared ${a.cleared}</div>` : ""}</td>
+      </tr>`).join("") + "</tbody>";
+  document.getElementById("risk-detail").innerHTML = "";
+  drawCohort();
+}
+function riskDetail(i) {
+  const a = ACCOUNTS[i];
+  document.getElementById("risk-detail").innerHTML = `
+    <div class="detail" style="margin-top:20px">
+      <div class="spread">
+        <div><h4 style="font-size:15px">${a.n}</h4>
+          <p class="sub" style="font-size:13px;margin-top:2px">${money(a.ltv)} lifetime · ${a.rets} returns of ${a.orders} orders</p></div>
+        <span class="pill ${a.score >= 85 ? "crit" : a.score >= 45 ? "warn" : "live"}">
+          ${a.score >= 45 ? "&#9888; " : '<i class="dot"></i>'}risk ${a.score}</span>
+      </div>
+      <p style="margin-top:14px;font-size:13.5px;max-width:74ch">${a.why}</p>
+      <p class="eyebrow" style="margin:20px 0 10px">Claim history</p>
+      <div class="t-scroll"><table>
+        <thead><tr><th>Date</th><th>Item</th><th>What they said</th><th>Inspection</th></tr></thead>
+        <tbody>${a.hist.map(([d, it, said, res]) => `<tr>
+          <td class="sub" style="white-space:nowrap">${d}</td><td>${it}</td>
+          <td class="sub">&ldquo;${said}&rdquo;</td>
+          <td>${/Confirmed/.test(res)
+            ? `<span class="pill live"><i class="dot"></i>${res}</span>`
+            : `<span class="pill warn">${res}</span>`}</td></tr>`).join("")}</tbody></table></div>
+      <div class="note crit" style="margin-top:18px">
+        <b>Action: ${a.posture}.</b> The refund is not in question — it never is. What changes
+        is who takes the call and which offers the engine is allowed to make.
+      </div>
+    </div>`;
+}
+function drawCohort() {
+  const host = document.getElementById("cohort-chart");
+  barChart(host, COHORT.map(c => ({l: c.b, v: c.n,
+      tip: `${c.n.toLocaleString()} accounts (${(c.n / 8412 * 100).toFixed(1)}%)`})), {
+    labelW: 92, barH: 16, gap: 12, aria: "Accounts by lifetime return rate",
+    emphasis: (r, i) => i >= COHORT_FLAG});
+  tableTwin(document.getElementById("cohort-table"),
+    ["Lifetime return rate", "Accounts", "Share", "Status"],
+    COHORT.map((c, i) => [c.b, c.n.toLocaleString(), (c.n / 8412 * 100).toFixed(1) + "%",
+      i >= COHORT_FLAG ? "Flagged tail" : "Normal"]));
+}
+
+/* ---------- review queue ---------- */
+function resolve(id, verb) {
+  const n = document.getElementById("q-" + id);
+  n.style.transition = "opacity .25s"; n.style.opacity = "0";
+  setTimeout(() => {
+    n.outerHTML = `<div class="note good" style="margin-bottom:16px">
+      <b>${verb}.</b> ${id} closed, and the classifier has the correction. Nothing was
+      clawed back from the customer.</div>`;
+    const left = document.querySelectorAll("#queue .detail").length;
+    document.getElementById("q-n").textContent = left;
+    const badge = document.querySelector('[data-nav="review"] .ct');
+    if (badge) { if (left) badge.textContent = left; else badge.remove(); }
+  }, 260);
+}
+
+/* ---------- live log: real backend, seeded fallback ---------- */
+async function refreshLog() {
+  let d = null;
+  try {
+    const ctl = new AbortController();
+    const to = setTimeout(() => ctl.abort(), 1200);   // a hang mid-demo reads as a crash
+    const r = await fetch("/api/log", {signal: ctl.signal});
+    clearTimeout(to);
+    if (r.ok) d = await r.json();
+  } catch (e) { /* offline or opened as a file: fall through to the seed */ }
+
+  const live = d && d.calls && d.calls.length;
+  const calls = live ? d.calls : LOG_SEED;
+  document.getElementById("log-pill").textContent = live
+    ? `${d.total_calls} live` : "demo data";
+  document.getElementById("log-pill").className = live ? "pill live" : "pill";
+  document.getElementById("log-src").textContent = live
+    ? "Live from the engine on this machine."
+    : "Seeded sample — start the server and take a call to see this fill up.";
+  if (live) {
+    document.getElementById("k-calls").textContent = d.total_calls.toLocaleString();
+    document.getElementById("k-esc").textContent = d.escalations;
+    document.getElementById("hero").textContent = money(d.margin_saved);
+  }
+  tableTwin(document.getElementById("log-t"),
+    ["Time", "Item", "What they said", "Outcome", "Saved"],
+    calls.slice(0, 8).map(c => [
+      `<span class="sub">${c._when || ""}</span>`,
+      c.item,
+      `<span class="sub">${c.reason || "—"}</span>`,
+      c.escalated
+        ? `<span class="pill warn">&#9888; ${c.escalated}</span>`
+        : `${c.offer_label}<div class="sub mono" style="font-size:11.5px;margin-top:3px">${c.reason_code}</div>`,
+      `<span class="${c.margin_saved > 0 ? "up" : "sub"}">${c.margin_saved > 0 ? "+" : ""}${money2(c.margin_saved)}</span>`,
+    ]));
+  const t = document.getElementById("log-t");
+  t.querySelectorAll("tr").forEach(tr => {
+    [...tr.children].forEach((c, i) => { if (i < 4) c.classList.remove("num"); });
+  });
+}
+
+/* ---------- redraw charts on page change / theme / resize ---------- */
+function redraw() {
+  if (!document.getElementById("shell").classList.contains("on")) return;
+  if (current === "live") sparkline(document.getElementById("spark"), SPARK);
+  if (current === "decisions") {
+    drawDialCharts();
+    divergingStack(document.getElementById("csatChart"), CSAT_OUTCOME);
+  }
+  if (current === "risk") drawCohort();
+  if (current === "intel") {
+    barChart(document.getElementById("reasons-chart"),
+      REASONS.map(r => ({l: r.l, v: r.n,
+        tip: `${r.n.toLocaleString()} returns · ${(r.n / REASON_TOTAL * 100).toFixed(1)}%`})),
+      {labelW: 214, aria: "Returns by reason"});
+    tableTwin(document.getElementById("reasons-table"), ["Reason", "Returns", "Share"],
+      REASONS.map(r => [r.l, r.n.toLocaleString(), (r.n / REASON_TOTAL * 100).toFixed(1) + "%"]));
+
+    barChart(document.getElementById("defect-chart"),
+      DEFECTS.map(x => ({l: x.item, v: x.rate,
+        tip: `${x.rate}% defect-attributed vs ${x.base}% baseline<br>${x.n} returns · ${x.phrase} in ${x.pp}%`})),
+      {labelW: 214, fmt: v => v.toFixed(1) + "%", aria: "Defect-attributed return rate by SKU",
+       emphasis: r => DEFECTS.find(d => d.item === r.l).verdict !== "ok"});
+    tableTwin(document.getElementById("defect-table"),
+      ["SKU", "Item", "Defect rate", "Category baseline", "Returns", "Dominant phrase", "Cost / qtr"],
+      DEFECTS.map(x => [x.sku, x.item, x.rate.toFixed(1) + "%", x.base.toFixed(1) + "%",
+        x.n, x.phrase + ` <span class="sub">${x.pp}%</span>`, money(x.cost)]));
+  }
+}
+addEventListener("resize", () => { clearTimeout(window._rz); window._rz = setTimeout(redraw, 140); });
+
+/* ---------- boot ---------- */
+renderSteps();
+</script>
+</body>
+</html>
