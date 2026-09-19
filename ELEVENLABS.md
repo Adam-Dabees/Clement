@@ -4,8 +4,9 @@ End-to-end structure of the voice agent: what the caller says, how it reaches th
 engine, and what comes back. Owned by the ElevenLabs person. Read alongside
 `CLAUDE.md` for the engine rules.
 
-Sections marked **[current]** describe what is in the repo now. Sections marked
-**[planned]** are the agreed changes for today's build. Everything else applies to both.
+Sections marked **[current]** describe what is in the repo now (updated 13:35: the planned
+response shape, `next_step`, temperature/max_tokens and the idempotent setup all shipped).
+Sections marked **[planned]** are still open. Everything else applies to both.
 
 ---
 
@@ -72,8 +73,8 @@ Escalation (over $400 cap, or caller asks for a person) short-circuits at turn 4
 | Setting | Value | Why |
 |---|---|---|
 | LLM | GPT-4o-mini | Fast first token, reliable tool calling. Sonnet/4o double latency for no gain on a five-turn call. |
-| Temperature | 0.2 **[planned]** (0.3 current) | Consistency. Same call twice should sound alike. |
-| Max tokens | ~120 **[planned]** | Hard cap on rambling. Prompt caps sentences; this caps the model physically. |
+| Temperature | 0.2 **[current]** | Consistency. Same call twice should sound alike. |
+| Max tokens | 120 **[current]** | Hard cap on rambling. Prompt caps sentences; this caps the model physically. |
 | First message | Hardcoded greeting | Swap for dynamic-variable greeting with `customer_name` if time allows. |
 | Auth | **Disabled** | Widget renders as nothing otherwise. No error. See §9. |
 | Custom LLM (Nebius) | Experiment only, after base works | Sponsor-track bonus. Fall back to 4o-mini if first token > 1s. |
@@ -82,7 +83,7 @@ Escalation (over $400 cap, or caller asks for a person) short-circuits at turn 4
 
 ## 5. System prompt
 
-**[current]** lives in `setup_agent.py:18–38`. **[planned]** replacement below.
+**[current]** is the text below, in `setup_agent.py` (`PROMPT`).
 Structure: identity → delivery rules → numbered flow → hard nevers → edge cases.
 Models follow short imperative sections far better than prose.
 
@@ -181,10 +182,12 @@ Request (`order_id`, `reason`, `condition` required):
 }
 ```
 
-`condition` **[planned]** becomes an enum `unopened | used | damaged` in the tool schema.
-Today any other string silently falls back to `used`.
+`condition` is described as `unopened | used | damaged`; the server normalises anything else
+("brand new" → unopened, "broken" → damaged, otherwise used) so a stray string never 422s.
+`conversation_id` is bound to `system__conversation_id` with `dynamic_variable`.
 
-Response **[current]** (`server.py:90`):
+Response **[superseded]** (the old sentence-only shape; `say`, `offer`, `customer_gets`,
+`fallback_offer` are still included for the text fallback):
 ```json
 {
   "offer": "39% back, keep the item",
@@ -196,7 +199,8 @@ Response **[current]** (`server.py:90`):
 }
 ```
 
-Response **[planned]** — facts, not a sentence, so the LLM tailors delivery:
+Response **[current]** — facts, not a sentence, so the LLM tailors delivery (`say` is also
+included as a ready-made line):
 ```json
 {
   "outcome": "partial_refund_keep_item",
@@ -235,7 +239,10 @@ Second decline:
 { "stop_negotiating": true, "next_step": "close_with_refund", "say": "Understood. I'm processing the full refund now, no return needed." }
 ```
 
-`next_step` is **[planned]**; `stop_negotiating` and `say` are **[current]**.
+All three fields are **[current]**. The response also carries `outcome`, `amount`,
+`keeps_item`, `escalated`, and accepts `customer_response` and `sentiment` in the request.
+The `say` comes from the engine record, so it says "no need to ship" only when the engine chose
+returnless (A1077, A1188) and "once it's back with us" when it chose a return (A1103).
 
 ### 6.4 `call_outcome` → `POST /tool/call_outcome` **[planned, if time]**
 
@@ -296,17 +303,18 @@ These feed the store the data scientist is building and are the rehearsal QA.
 
 ## 9. Setup sequence
 
-1. `uvicorn server:app --port 8000`
-2. `cloudflared tunnel --url http://localhost:8000` → copy the `https://….trycloudflare.com` URL
-3. `export ELEVENLABS_API_KEY=… PUBLIC_URL=https://…`
-4. `python setup_agent.py` → prints `agent_id` and the embed snippet
-5. Paste the snippet into `static/index.html` line 90 (currently commented out)
-6. ElevenLabs dashboard → agent → **Advanced → disable authentication**
-7. Open the dashboard, click the widget, say "A1077, wrong shade of grey"
-8. Success = uvicorn log shows `POST /tool/lookup_order` then `POST /tool/decide_return`
+1. `ELEVENLABS_API_KEY=…` in `.env`
+2. `.venv/bin/uvicorn server:app --reload --port 8000`
+3. `./tunnel.sh` → starts cloudflared, writes `PUBLIC_URL` and `ELEVENLABS_AGENT_ID` to `.env`,
+   creates or updates the tools and agent, asks the API to disable agent auth
+4. Restart uvicorn so it reads `ELEVENLABS_AGENT_ID`; the widget mounts itself on `/`
+5. If the widget renders as nothing: ElevenLabs dashboard → agent → **Advanced → disable authentication**
+6. Click the widget, say "A1077, wrong shade of grey"
+7. Success = uvicorn log shows `POST /tool/lookup_order` then `POST /tool/decide_return`, and a
+   row appears on `/business.html` Live
 
-**Tunnel restart** → URL changes → every tool points at a dead host → repeat from step 3.
-**[planned]** `setup_agent.py` updates tool URLs by id instead of creating new tools each run.
+**Tunnel restart** → URL changes → run `./tunnel.sh` again. It PATCHes the existing tools by id
+(`.clement_agent.json`) instead of creating duplicates.
 
 ---
 
@@ -318,8 +326,8 @@ These feed the store the data scientist is building and are the rehearsal QA.
 | Agent chats but never calls a tool | Tool description says *what*, not *when* | Rewrite description; leave the prompt alone |
 | Tools return 502/timeout | Tunnel restarted, stale URL | Re-run `setup_agent.py` with new `PUBLIC_URL` |
 | Decline counter carries across calls | `conversation_id` = `"demo"` | Bind `system__conversation_id` |
-| Agent says "no return needed" then "once it's back with us" | `customer_declined` phrase hardcoded; engine may pick return | Demo declines on A1188 (resale 0) until fixed |
-| Agent reads `fallback_offer` as store credit | Engine's `fallback` is next-best-by-net | On the 10:50 engine fix list; until then prompt says use `say`, ignore `fallback_offer` |
+| Agent says "no return needed" then "once it's back with us" | fixed 13:35: phrase comes from the engine | — |
+| Agent reads `fallback_offer` as store credit | fixed 13:35: fallback is the full refund | — |
 | Agent hangs mid-call | Nebius classifier slow | `classify.py` timeout 2.5s, returns `None`, keywords fallback |
 
 ---

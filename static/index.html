@@ -50,6 +50,7 @@
     border: 1px solid var(--line); background: var(--bg); color: var(--ink);
   }
   input { min-width: 240px; flex: 1; }
+  input[type=checkbox] { min-width: 0; flex: 0 0 auto; width: 16px; height: 16px; padding: 0; margin: 0; accent-color: var(--accent); }
   button { background: var(--accent); color: #fff; border: none; cursor: pointer; font-weight: 500; }
   button.ghost { background: transparent; color: var(--muted); border: 1px solid var(--line); }
   .say { margin-top: 20px; padding: 18px 20px; border-left: 3px solid var(--accent);
@@ -104,7 +105,7 @@
         <option value="unopened">Unopened</option>
         <option value="damaged">Damaged</option>
       </select>
-      <label class="sub" style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="f-repl" style="min-width:0;flex:0">Wants replacement</label>
+      <label class="sub" style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="f-repl">Wants replacement</label>
       <button onclick="go()">Decide</button>
       <button class="ghost" onclick="decline()">Customer declines</button>
       <button class="ghost" onclick="reset()">Reset</button>

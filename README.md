@@ -13,49 +13,64 @@ That split is the whole pitch.
 ## Run it
 
 ```bash
-pip install fastapi uvicorn requests
-python eval.py                          # verify the engine: 12/12
-uvicorn server:app --reload --port 8000 # dashboard at localhost:8000
+uv venv --python 3.12 .venv && uv pip install --python .venv/bin/python -r requirements.txt
+.venv/bin/python eval.py                              # verify the engine: 25/25
+.venv/bin/uvicorn server:app --reload --port 8000     # consoles at localhost:8000
 ```
 
-The text fallback on the dashboard works immediately, with no API keys.
+- `http://localhost:8000/` — demo console: stat tiles, voice widget slot, **text fallback**
+  that drives the identical backend with no API keys.
+- `http://localhost:8000/business.html` — merchant console. **Live** reads `/api/log`;
+  the other pages are seeded.
+
 Get this far first. Everything after this is the voice layer.
+
+```bash
+.venv/bin/uvicorn server:app --port 8010 &          # scripted wiring test
+.venv/bin/python smoke.py --port 8010                # five demo call sequences, Rule 2 check
+```
 
 ## Add voice
 
-```bash
-# 1. Expose the backend. ElevenLabs webhook tools need a public URL.
-cloudflared tunnel --url http://localhost:8000     # or: ngrok http 8000
+Put the keys in `.env` (gitignored, never committed):
 
-# 2. Create the agent and its three tools.
-export ELEVENLABS_API_KEY=sk_...
-export PUBLIC_URL=https://whatever-your-tunnel-printed.trycloudflare.com
-python setup_agent.py
+```
+ELEVENLABS_API_KEY=sk_...
+NEBIUS_API_KEY=...            # optional; without it the engine uses keyword fallback
 ```
 
-It prints two lines of HTML. Paste them into `static/index.html` where the
-commented-out block is, and reload.
+Then, with the server running on 8000:
 
-**Then do this or you will lose twenty minutes:** open the agent in the
-ElevenLabs dashboard, Advanced tab, and disable authentication. The embed
-widget only works with a public agent.
+```bash
+brew install cloudflared      # once
+./tunnel.sh                   # tunnel -> PUBLIC_URL in .env -> setup_agent.py
+```
+
+`tunnel.sh` starts a cloudflared quick tunnel, writes the URL to `.env`, and runs
+`setup_agent.py`, which creates the agent and three webhook tools the first time and
+**updates them in place** every time after (ids in `.clement_agent.json`). It writes
+`ELEVENLABS_AGENT_ID` to `.env`; restart uvicorn and the widget mounts itself on the
+console from `/api/agent`.
+
+**If the widget renders as nothing:** open the agent in the ElevenLabs dashboard,
+Advanced tab, disable authentication. `setup_agent.py` asks for that via the API, but
+the dashboard is the fallback.
+
+`python setup_agent.py --dry-run` prints every payload without a key.
 
 ## Nebius
 
-Point the reasoning at Nebius AI Studio. It is OpenAI-compatible, so it is a
-base_url change:
+`classify.py` is the intake classifier: it turns a rambling spoken complaint into
+labels (`is_defect`, `item_status`, `condition`, `wants_replacement`, `requests_human`,
+per-field confidence) before the engine runs. It runs on Nebius Token Factory
+(formerly AI Studio) through the OpenAI SDK with a 2.5 s timeout and returns `None` on
+any failure, at which point the engine falls back to keyword matching. It never decides
+an outcome. Below 0.6 confidence the engine treats the return as a defect: ambiguity
+resolves in the customer's favour.
 
-```python
-from openai import OpenAI
-client = OpenAI(
-    base_url="https://api.studio.nebius.com/v1/",
-    api_key=os.environ["NEBIUS_API_KEY"],
-)
+```bash
+.venv/bin/python classify.py "one speed stopped working and I want a manager"
 ```
-
-Use it for the one genuinely fuzzy job: classifying a rambling spoken
-complaint into `condition` and `is_defect` before the engine runs. Ten
-seconds of stage time, and it is an honest use rather than a bolt-on.
 
 ---
 
@@ -65,10 +80,14 @@ seconds of stage time, and it is an honest use rather than a bolt-on.
 |---|---|
 | `engine.py` | The IP. Deterministic. Same input, same decision, every time. |
 | `data.py` | Five mock orders with real cost structure, and the policy envelope. |
-| `server.py` | Three webhook tools the agent calls, plus the dashboard API. |
-| `setup_agent.py` | Creates the ElevenLabs agent and tools in one run. |
-| `eval.py` | Twelve labelled cases with ground truth. Run it, screenshot it. |
-| `static/index.html` | Dashboard, voice widget, and the text fallback. |
+| `classify.py` | Nebius intake classifier. Labels only, degrades to `None`. |
+| `server.py` | Three webhook tools the agent calls, plus `/api/log`, `/api/agent`, `/api/health`. |
+| `setup_agent.py` | Creates or updates the ElevenLabs agent and tools. Idempotent. |
+| `tunnel.sh` | cloudflared quick tunnel + `setup_agent.py` in one command. |
+| `eval.py` | 25 labelled cases with ground truth. Run it, screenshot it. |
+| `smoke.py` | Scripted call sequences against a running server. |
+| `static/index.html` | Demo console, voice widget, and the text fallback. |
+| `static/business.html` | Merchant console. Live page is wired; the rest is seeded. |
 
 ## The five demo orders
 
@@ -78,7 +97,7 @@ seconds of stage time, and it is an honest use rather than a bolt-on.
 | A1077 | Duvet, $218 | Opened bedding, zero recovery. Keep-it partial. |
 | A1103 | Carry-On, $349 | High recovery, near-new. Full return is correct. |
 | A1150 | Espresso, $780 | Over the cap. Escalates to a human. |
-| A1188 | Socks, $34 | Freight exceeds the item. Obvious returnless. |
+| A1188 | Socks, $34 | Decline twice: full refund, no return, agent stops. |
 
 ---
 
@@ -87,38 +106,22 @@ seconds of stage time, and it is an honest use rather than a bolt-on.
 1. **It never denies a refund.** It offers alternatives. The customer picks.
 2. **Two declines and it stops.** `customer_declined` counts refusals; at two
    the engine hands over the full refund and the agent stops negotiating.
+   Escalation still wins over the decline counter.
 3. **Fault before margin.** If the item is defective, the engine never offers
    a partial. Full value back. This is the answer to "is this a dark pattern?"
 4. **A hard cap.** Above $400 it escalates rather than deciding.
 5. **The model never sees cost basis.** Margin figures stay server-side, out
-   of the transcript, so the agent cannot be talked into revealing them.
-
-## Hour plan
-
-| Hours | Do |
-|---|---|
-| 0–1 | Run the repo. Tunnel up, agent talking, one round trip working. |
-| 1–3 | Your own product data and policy numbers in `data.py`. |
-| 3–5 | Tune the prompt. Voice needs short sentences; read them aloud. |
-| 5–6 | **Record the backup video.** Not at hour 8. |
-| 6–7 | Expand `eval.py` to ~30 cases. The number goes on your last slide. |
-| 7–8 | Rehearse the demo three times, out loud, with a stranger. |
-
-## Demo order
-
-Socks (obvious win) → duvet (the interesting one) → espresso (escalation,
-shows restraint) → hand the judge a phone.
-
-Give them a card with three suggested lines. They feel free, you control
-the surface.
+   of the transcript; `server.py` refuses to return them and `smoke.py` checks.
+6. **Ambiguity favours the customer.** Classifier confidence under 0.6 is a defect.
 
 ## When it breaks
 
 - **Tool never fires:** the agent is not calling it. Check the tool is
   attached to the agent, and that its description says *when* to call it.
 - **Widget doesn't render:** authentication is still enabled on the agent.
-- **Long silence mid-call:** your webhook is slow. The engine is pure Python
-  and returns in under a millisecond; if it's slow, something upstream is
-  doing network I/O it shouldn't.
-- **Tunnel URL changed:** it does, every restart. Re-run `setup_agent.py`
-  or update the tool URLs in the dashboard.
+- **Long silence mid-call:** your webhook is slow. The engine returns in under
+  a millisecond; the classifier is capped at 2.5 s. Check `/api/log` for
+  `classifier_fallback: true` and `latency_ms`.
+- **Tunnel URL changed:** it does, every restart. Run `./tunnel.sh` again.
+- **Decline counter carries across calls:** `conversation_id` is not bound to
+  `system__conversation_id`. `setup_agent.py` binds it; re-run it.

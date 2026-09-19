@@ -38,8 +38,9 @@ worn socks it then throws away. The customer waited a week for a label. Both los
 
 ## 3. The decision, made properly
 
-Visual: the five outcomes side by side — full refund + return, returnless refund,
-partial + keep, exchange, store credit — each scored as net-to-merchant.
+Visual: the outcomes side by side — full refund + return, returnless refund,
+partial + keep, exchange — each scored as net-to-merchant. (Store credit with a bonus is a
+designed outcome, not yet scored; say so if asked.)
 
 - Every outcome scored against the baseline every merchant runs today.
 - Fault is decided **before** margin. Our defect → full value back, always.
@@ -140,8 +141,8 @@ that call." **[illustrative numbers, real mechanism]**
   envelope. The dry-run replay of the last 90 days closes the sale.
 - Wedge: Shopify homeware/apparel merchants, where zero-resale categories are common.
 
-Worked example **[measured]**: eval set saves $784.41 across 12 returns ≈ $65 per return.
-At a 20% share, ~$13 per call to us, ~$52 to the merchant, and the customer got money
+Worked example **[measured]**: eval set saves $1,254.37 across 25 returns ≈ $50 per return.
+At a 20% share, ~$10 per call to us, ~$40 to the merchant, and the customer got money
 faster without shipping anything. *(20% is a proposal, not a decision — say "for
 example".)*
 
@@ -169,17 +170,16 @@ the decision engine sees all of it. We take the returns line."
 
 | Number | Source | Tag |
 |---|---|---|
-| 12/12 eval accuracy, 17% escalation, $784.41 saved, 27% over baseline | `python eval.py` | measured |
+| 25/25 eval accuracy, 16% escalation, $1,254.37 saved, 21.0% over baseline | `python eval.py` (13:35) | measured |
+| A1077: 39% back = $85.02, +$180.98 vs baseline; two declines → $218 returnless, +$48.00 | `/api/log` on stage | measured |
 | Per-order cost structure (A1042…A1188) | `data.py` | measured (mock, realistic) |
 | $61,400 hero, 2,847 returns, CSAT 4.46, dial curve | `business.html` seeds | illustrative |
 | Risk accounts, cohort, signals | `business.html` seeds | illustrative |
 | Defect rates, churn exposure | `business.html` seeds | illustrative |
 
-Consistency to fix before rehearsal (the judge *will* notice a mismatch between screens):
-- `business.html` seed says duvet = "40% back" and the tape says "$87.20"; the engine
-  says **39% / $85.02**. Change the seed, not the engine.
-- The fallback the agent offers today is store credit (engine fix #3), while the phrase
-  promises "a full refund if you'd rather". Decide which before the voice rehearsal.
+Consistency, fixed 13:35 (verified in Chrome against the running server):
+- `business.html` seeds now say **39% / $85.02 / +$180.98**, matching the engine.
+- The fallback is the full refund in the engine record, the tool response and the phrase.
 
 ## Appendix B — Q&A prep
 
